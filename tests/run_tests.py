@@ -126,6 +126,9 @@ def test_inputs(bp: dict) -> None:
                       f"schedule_{i}_{suffix} input exists")
         check("notify_target" in inputs, "optional notify_target input exists")
         check("last_reason" in inputs, "optional last_reason input exists")
+        check("boiler_status_entity" in inputs, "optional boiler_status_entity input exists")
+        check("time_left_entity" in inputs, "optional time_left_entity input exists")
+        check("time_left_pct_entity" in inputs, "optional time_left_pct_entity input exists")
 
 
 def test_jinja(bp: dict) -> None:

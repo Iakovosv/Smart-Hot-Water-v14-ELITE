@@ -155,6 +155,9 @@ selected from the UI** — no code required.
 | `last_on_entity` | Helper τελευταίας ενεργοποίησης | `input_datetime.water_heater_on` |
 | `notify_target` | Συσκευή ειδοποίησης (προαιρετική, `notify.*`) | κενό |
 | `last_reason` | Helper λόγου (`input_text`, προαιρετικό) | κενό |
+| `boiler_status_entity` | Helper κατάστασης Ελληνικά (`input_select`) | κενό |
+| `time_left_entity` | Helper υπολοίπου λεπτών (`input_number`) | κενό |
+| `time_left_pct_entity` | Helper υπολοίπου % (`input_number`) | κενό |
 | `hysteresis` | Υστέρηση επανάναψης (αποφυγή short cycling) | `3 °C` |
 
 ### Κενά / προαιρετικά πεδία — ο αυτοματισμός δουλεύει πάντα
@@ -172,6 +175,8 @@ selected from the UI** — no code required.
 | `boost_target_temp` / `boost_minutes` | Χρησιμοποιείται ο στόχος/χρόνος **ήπιου** καιρού. |
 | `notify_target` | Δεν στέλνεται καμία ειδοποίηση (όλα δουλεύουν κανονικά). |
 | `last_reason` | Δεν καταγράφεται ο λόγος της τελευταίας ενέργειας. |
+| `boiler_status_entity` | Δεν ενημερώνεται η ελληνική κατάσταση λέβητα. |
+| `time_left_entity` / `time_left_pct_entity` | Δεν ενημερώνεται η αντίστροφη μέτρηση. |
 | `hysteresis` | `3 °C` — μετά τον στόχο, επανάναψη όταν πέσει 3° κάτω (αποφυγή short cycling). |
 
 > ⚠️ **Προσοχή:** αν αφήσεις κενό `boiler_switch` ή `water_temp_sensor`, ο
@@ -211,6 +216,22 @@ selected from the UI** — no code required.
   - `sched 4: no_presence` — δεν ήταν κάποιος στο σπίτι
   - `sched 5: sensor_bad` / `blocked_check` / `already_on` / `master_off`
   - `defrost` — έγινε defrost
+
+### Κατάσταση λέβητα & αντίστροφη μέτρηση (προαιρετικά)
+
+- **`boiler_status_entity`** — `input_select` με ελληνικές ενδείξεις
+  **`Θέρμανση` / `Αναμονή` / `Έτοιμο`**:
+  - `Θέρμανση` → όταν ο λέβητας ανάβει (πρόγραμμα ή boost)
+  - `Έτοιμο` → όταν το νερό έφτασε/ξεπέρασε τον στόχο
+  - `Αναμονή` → σε κάθε άλλη περίπτωση (μπλοκαρίσματα, παράλειψη, τέλος χρόνου)
+- **`time_left_entity`** (`input_number`, λεπτά) και **`time_left_pct_entity`**
+  (`input_number`, %) — **αντίστροφη μέτρηση** του χρόνου που απομένει, με βάση
+  τον **μέγιστο χρόνο** του τρέχοντος καιρού:
+  - κρύο (`< cold_threshold`) → `max_time_cold`
+  - ήπιο → `max_time_warm`
+  - Γεμίζει κάθε 30 δευτ. και **μηδενίζεται** όταν ολοκληρωθεί η θέρμανση.
+  - Το `time_left_pct_entity` είναι ιδανικό για progress bar που **αδειάζει**
+    (αντίστροφο).
 
 ### Καταστάσεις / Status values
 

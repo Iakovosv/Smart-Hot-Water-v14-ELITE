@@ -54,6 +54,22 @@ input_number:
     step: 1
     unit_of_measurement: "%"
     mode: box
+  gsw_time_left_minutes:
+    name: "GSW: Time left minutes (Υπόλοιπο χρόνου - λεπτά)"
+    icon: mdi:timer-sand
+    min: 0
+    max: 180
+    step: 1
+    unit_of_measurement: min
+    mode: box
+  gsw_time_left_pct:
+    name: "GSW: Time left percent (Υπόλοιπο χρόνου - %)"
+    icon: mdi:timer-outline
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: box
 
 input_select:
   gsw_hotwater_status:
@@ -69,6 +85,16 @@ input_select:
       - "Solar skip"      # Παράλειψη ηλιακού
       - "Defrost"         # Defrost
       - "Boost"           # Boost
+
+  gsw_boiler_status:
+    name: "GSW: Boiler status EL (Κατάσταση λέβητα - Ελληνικά)"
+    icon: mdi:water-boiler
+    # NOTE: option values are used by the blueprint and must stay exactly as
+    # below:
+    options:
+      - "Θέρμανση"   # Heating
+      - "Αναμονή"    # Idle
+      - "Έτοιμο"     # Ready
 
 input_datetime:
   water_heater_on:

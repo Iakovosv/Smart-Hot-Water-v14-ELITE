@@ -129,6 +129,12 @@ REHEAT = "{{ water_now < (target_temp - hysteresis_val) }}"
 
 REASON_TEXT = "sched {{ idx }}: {{ reason }}"
 
+# Reverse countdown: minutes left = max - elapsed, clamped to [0, max].
+TIME_LEFT_MIN = "{{ [ [ (max_time - elapsed), 0 ] | max, max_time ] | min | round(1) }}"
+
+# Reverse countdown percent = remaining / max * 100, clamped to [0, 100].
+TIME_LEFT_PCT = "{{ ([[ (((max_time) - (elapsed)) / ([max_time, 1] | max) * 100) | round(0), 100 ] | min, 0] | max) | int }}"
+
 # Full gate chain, in the same order as the blueprint's schedule decision.
 DECIDE = """{% if not master_on %}master_off
 {% elif not presence_ok %}no_presence
@@ -360,6 +366,33 @@ def test_reason() -> None:
           "reason composed for schedule 1")
 
 
+def test_time_left() -> None:
+    print("test_time_left (reverse countdown minutes + percent)")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 16, 3))
+
+    def mins(max_time, elapsed):
+        return float(render(env, TIME_LEFT_MIN, max_time=max_time, elapsed=elapsed))
+
+    # max 60 min
+    check(mins(60, 0) == 60.0, "at start -> 60 min left")
+    check(mins(60, 30) == 30.0, "half way -> 30 min left")
+    check(mins(60, 60) == 0.0, "at end -> 0 min left")
+    check(mins(60, 75) == 0.0, "past end -> clamped to 0")
+    check(render(env, TIME_LEFT_PCT, max_time=60, elapsed=0) == "100",
+          "at start -> 100% left")
+    check(render(env, TIME_LEFT_PCT, max_time=60, elapsed=30) == "50",
+          "half way -> 50% left")
+    check(render(env, TIME_LEFT_PCT, max_time=60, elapsed=60) == "0",
+          "at end -> 0% left")
+    check(render(env, TIME_LEFT_PCT, max_time=60, elapsed=90) == "0",
+          "past end -> clamped to 0%")
+    check(render(env, TIME_LEFT_PCT, max_time=0, elapsed=5) == "0",
+          "max 0 -> no division by zero")
+    # cold vs warm weather gives different countdown
+    check(mins(90, 0) == 90.0, "cold weather max 90 -> 90 min left")
+    check(mins(30, 10) == 20.0, "warm weather max 30, 10 elapsed -> 20 min left")
+
+
 def main() -> int:
     test_presence()
     test_solar()
@@ -370,6 +403,7 @@ def main() -> int:
     test_reheat()
     test_scenarios()
     test_reason()
+    test_time_left()
     print()
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")
