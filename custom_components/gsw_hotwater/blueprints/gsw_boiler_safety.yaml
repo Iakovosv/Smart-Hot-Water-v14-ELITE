@@ -26,7 +26,7 @@ blueprint:
     📡 Project: Greece Sky and Weather
     ▶ https://www.youtube.com/@GreeceSkyandWeather
   domain: automation
-  source_url: https://github.com/Iakovosv/Smart-Hot-Water-v14-ELITE
+  source_url: https://raw.githubusercontent.com/Iakovosv/Smart-Hot-Water-v14-ELITE/main/custom_components/gsw_hotwater/blueprints/gsw_boiler_safety.yaml
   author: Iakovos Venieris (Greece Sky and Weather)
 
   input:

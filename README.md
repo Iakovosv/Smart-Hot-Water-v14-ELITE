@@ -120,6 +120,35 @@ selected from the UI** — no code required.
 > Οι οντότητες αυτές είναι **προαιρετικές** — το blueprint δουλεύει και χωρίς
 > αυτές, αρκεί να αφήσεις τα αντίστοιχα πεδία κενά.
 
+### ❓ «Έκανα restart αλλά το blueprint δεν εμφανίζεται»
+
+Το blueprint **δεν** έρχεται από μόνο του με το restart — το τοποθετεί ο
+**installer της ενσωμάτωσης**. Έλεγξε με τη σειρά:
+
+1. **Υπάρχει η ενσωμάτωση;** *Settings → Devices & Services* — ψάξε
+   **GSW Smart Hot Water**. Αν **δεν** υπάρχει, πρόσθεσέ την:
+   **Add Integration → GSW Smart Hot Water → Submit**. Αυτό αντιγράφει **και τα
+   δύο** blueprints και μετά κάνε **Developer Tools → YAML → Reload Automations**.
+   (Αν δεν υπάρχει ούτε στο HACS, κατέβασέ την από HACS πρώτα — Μέθοδος A.)
+2. **Υπάρχουν τα αρχεία;** Με File Editor / Studio Code Server δες τον φάκελο
+   `<config>/blueprints/automation/gsw_hotwater/` — πρέπει να έχει
+   `gsw_smart_hot_water.yaml` και `gsw_boiler_safety.yaml`.
+3. **Έλεγξε το log:** *Settings → System → Logs* — φίλτραρε `gsw_hotwater`.
+   Αν δεις `blueprint install failed`, το integration δεν μπόρεσε να γράψει
+   (συνήθως δικαιώματα).
+4. **Κάνε refresh τη σελίδα Blueprints** (Ctrl+F5) — το μενού μερικές φορές
+   κρατά cache.
+5. **Fallback χωρίς integration** — *Settings → Automations & Scenes →
+   Blueprints → **Import Blueprint*** και δώσε ένα-ένα τα raw URL:
+   - `https://raw.githubusercontent.com/Iakovosv/Smart-Hot-Water-v14-ELITE/main/custom_components/gsw_hotwater/blueprints/gsw_smart_hot_water.yaml`
+   - `https://raw.githubusercontent.com/Iakovosv/Smart-Hot-Water-v14-ELITE/main/custom_components/gsw_hotwater/blueprints/gsw_boiler_safety.yaml`
+
+   Ή αντίγραψε τα αρχεία χειροκίνητα στον φάκελο του βήματος 2.
+
+> ℹ️ Αν εισάγεις με «Import Blueprint», το HA το αποθηκεύει με δικό του όνομα
+> αρχείου (π.χ. `gsw_hotwater/gsw_smart_hot_water.yaml`) — θα το δεις στη λίστα
+> **Blueprints** με το όνομα **🔥 GSW: Smart Hot Water ELITE**.
+
 ---
 
 ## Ρύθμιση / Configuration
