@@ -10,8 +10,9 @@ blueprint:
     • Presence check: heating only runs when at least one selected person is in
       one of the selected zones (optional user 2).
     • Defrost for solar collectors with a time window (supports past-midnight).
-    • Up to 3 hot-water schedules, each with its own enable switch and target
-      temperature (0 = automatic).
+    • Up to 6 hot-water schedules, each with its own enable switch, exact start
+      time (minute precision) and target temperature (0 = automatic). Enable any
+      combination - none, one, several or all.
     • Solar support: skip heating using a flag and/or the collector temperature
       (choose off / flag / temperature / both).
     • Manual boost: heat immediately from a button, with its own target and time.
@@ -28,8 +29,10 @@ blueprint:
     • Έλεγχος παρουσίας: ανάβει μόνο αν ένας από τους επιλεγμένους χρήστες
       βρίσκεται σε μία από τις επιλεγμένες ζώνες (προαιρετικός χρήστης 2).
     • Defrost ηλιακού με χρονικό παράθυρο (υποστηρίζει και πέρασμα μεσάνυχτα).
-    • Έως 3 προγράμματα ζεστού νερού, το καθένα με δικό του διακόπτη
-      ενεργοποίησης και θερμοκρασία στόχο (0 = αυτόματο).
+    • Έως 6 προγράμματα ζεστού νερού, το καθένα με δικό του διακόπτη
+      ενεργοποίησης, ακριβή ώρα έναρξης (ακρίβεια λεπτού) και θερμοκρασία
+      στόχο (0 = αυτόματο). Ενεργοποίησε όποιον συνδυασμό θέλεις - κανένα,
+      ένα, πολλά ή όλα.
     • Υποστήριξη ηλιακού: παράλειψη θέρμανσης με flag ή/και θερμοκρασία
       συλλέκτη (επιλογή: off / flag / temperature / both).
     • Χειροκίνητο boost: άμεσο άναμμα από κουμπί, με δικό του στόχο και χρόνο.
@@ -249,6 +252,66 @@ blueprint:
           step: 1
           unit_of_measurement: "°C"
 
+    schedule_4_enabled:
+      name: Schedule 4 enabled (Πρόγραμμα 4 ενεργό)
+      default: false
+      selector:
+        boolean: {}
+    schedule_4_time:
+      name: Schedule 4 time (Ώρα προγράμματος 4)
+      default: "00:00:00"
+      selector:
+        time: {}
+    schedule_4_temp:
+      name: Schedule 4 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 70
+          step: 1
+          unit_of_measurement: "°C"
+
+    schedule_5_enabled:
+      name: Schedule 5 enabled (Πρόγραμμα 5 ενεργό)
+      default: false
+      selector:
+        boolean: {}
+    schedule_5_time:
+      name: Schedule 5 time (Ώρα προγράμματος 5)
+      default: "00:00:00"
+      selector:
+        time: {}
+    schedule_5_temp:
+      name: Schedule 5 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 70
+          step: 1
+          unit_of_measurement: "°C"
+
+    schedule_6_enabled:
+      name: Schedule 6 enabled (Πρόγραμμα 6 ενεργό)
+      default: false
+      selector:
+        boolean: {}
+    schedule_6_time:
+      name: Schedule 6 time (Ώρα προγράμματος 6)
+      default: "00:00:00"
+      selector:
+        time: {}
+    schedule_6_temp:
+      name: Schedule 6 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 70
+          step: 1
+          unit_of_measurement: "°C"
+
     # ------------------------------------------------------------------ #
     # Solar
     # ------------------------------------------------------------------ #
@@ -454,14 +517,23 @@ variables:
     - !input schedule_1_enabled
     - !input schedule_2_enabled
     - !input schedule_3_enabled
+    - !input schedule_4_enabled
+    - !input schedule_5_enabled
+    - !input schedule_6_enabled
   sched_times:
     - !input schedule_1_time
     - !input schedule_2_time
     - !input schedule_3_time
+    - !input schedule_4_time
+    - !input schedule_5_time
+    - !input schedule_6_time
   sched_temps:
     - !input schedule_1_temp
     - !input schedule_2_temp
     - !input schedule_3_temp
+    - !input schedule_4_temp
+    - !input schedule_5_temp
+    - !input schedule_6_temp
 
   # Solar
   solar_mode_val: !input solar_mode
@@ -490,7 +562,7 @@ variables:
 
 trigger:
   - platform: time_pattern
-    minutes: "/5"
+    minutes: "/1"
     id: tick
   - platform: state
     entity_id: !input boost_button
@@ -673,7 +745,7 @@ action:
                   # SCHEDULES
                   # ---------------------------------------------------- #
                   - repeat:
-                      count: 3
+                      count: 6
                       sequence:
                         - variables:
                             sch_on: "{{ sched_enabled[repeat.index - 1] }}"
@@ -732,7 +804,7 @@ action:
                             {% set now_t = now().time() %}
                             {% set st = today_at(sch_time).time() %}
                             {% set delta = (now_t.hour * 60 + now_t.minute) - (st.hour * 60 + st.minute) %}
-                            {{ 0 <= delta < 5 }}
+                            {{ 0 <= delta < 1 }}
                         - condition: template
                           value_template: "{{ presence_ok }}"
                         - condition: template

@@ -102,7 +102,7 @@ SOLAR = """{% if solar_mode_val == 'off' %}
 WINDOW = """{% set now_t = now().time() %}
 {% set st = today_at(sched_time).time() %}
 {% set delta = (now_t.hour * 60 + now_t.minute) - (st.hour * 60 + st.minute) %}
-{{ 0 <= delta < 5 }}"""
+{{ 0 <= delta < 1 }}"""
 
 TARGET = """{% if sched_temp | float(0) > 0 %}
   {{ sched_temp }}
@@ -215,15 +215,17 @@ def test_solar() -> None:
 
 
 def test_window() -> None:
-    print("test_window (5-minute schedule window)")
-    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 2))
-    check(render(env, WINDOW, sched_time="06:00:00") == "True", "06:02 matches 06:00 window")
-    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 4))
-    check(render(env, WINDOW, sched_time="06:00:00") == "True", "06:04 matches 06:00 window")
-    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 5))
-    check(render(env, WINDOW, sched_time="06:00:00") == "False", "06:05 no longer matches")
+    print("test_window (minute-accurate schedule match)")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0))
+    check(render(env, WINDOW, sched_time="06:00:00") == "True", "06:00 matches 06:00")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0, 30))
+    check(render(env, WINDOW, sched_time="06:00:00") == "True", "06:00:30 matches 06:00")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 1))
+    check(render(env, WINDOW, sched_time="06:00:00") == "False", "06:01 no longer matches")
     env = _make_env({}, {}, datetime(2026, 1, 1, 5, 59))
     check(render(env, WINDOW, sched_time="06:00:00") == "False", "05:59 before window")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 45))
+    check(render(env, WINDOW, sched_time="06:45:00") == "True", "06:45 matches 06:45 (minute precision)")
 
 
 def test_target() -> None:

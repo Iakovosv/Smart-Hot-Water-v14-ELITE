@@ -110,6 +110,13 @@ def test_inputs(bp: dict) -> None:
         check("name" in spec, f"input '{key}' has a name")
         check("selector" in spec, f"input '{key}' has a selector")
 
+    # Schedules: 6 independent, minute-accurate slots (main blueprint only)
+    if "schedule_1_enabled" in inputs:
+        for i in range(1, 7):
+            for suffix in ("enabled", "time", "temp"):
+                check(f"schedule_{i}_{suffix}" in inputs,
+                      f"schedule_{i}_{suffix} input exists")
+
 
 def test_jinja(bp: dict) -> None:
     print("test_jinja")
