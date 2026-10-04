@@ -1,0 +1,78 @@
+# ==========================================================================
+#  GSW Smart Hot Water - helper entities (packages)
+#
+#  Add this file to your Home Assistant configuration, e.g.:
+#    1) copy it to  <config>/packages/gsw_hotwater.yaml
+#    2) in configuration.yaml add:
+#         homeassistant:
+#           packages: !include_dir_named packages
+#    3) Developer Tools -> YAML -> "Check configuration" -> "Reload all"
+#
+#  Or create the same helpers from Settings -> Devices & Services -> Helpers.
+#  The blueprint reads these by default, but EVERY entity can be changed in the
+#  blueprint UI - nothing is hardcoded.
+# ==========================================================================
+
+input_boolean:
+  gsw_smart_hotwater_enable:
+    name: "GSW: Smart Hot Water enable (Ενεργοποίηση έξυπνου ζεστού νερού)"
+    icon: mdi:water-boiler
+  water_temperature_check:
+    name: "GSW: Water temperature check - block heating (Μπλοκάρισμα θέρμανσης)"
+    icon: mdi:water-off
+  gsw_solar_skip:
+    name: "GSW: Solar skip - water is hot enough from the sun (Παράλειψη λόγω ηλιακού)"
+    icon: mdi:weather-sunny
+
+input_button:
+  gsw_hotwater_boost:
+    name: "GSW: Boost now (Άμεσο boost)"
+    icon: mdi:flash
+
+input_number:
+  gsw_boost_target_temp:
+    name: "GSW: Boost target temperature (Στόχος boost)"
+    icon: mdi:thermometer
+    min: 25
+    max: 70
+    step: 1
+    unit_of_measurement: "°C"
+    mode: box
+  gsw_boost_minutes:
+    name: "GSW: Boost max minutes (Μέγιστα λεπτά boost)"
+    icon: mdi:timer
+    min: 5
+    max: 180
+    step: 5
+    unit_of_measurement: min
+    mode: box
+  gsw_hotwater_progress:
+    name: "GSW: Heating progress (Πρόοδος θέρμανσης)"
+    icon: mdi:progress-clock
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: box
+
+input_select:
+  gsw_hotwater_status:
+    name: "GSW: Boiler status (Κατάσταση λέβητα)"
+    icon: mdi:information-outline
+    # NOTE: option values are used by the blueprint and must stay exactly as
+    # below (they are shown as-is; the Greek meaning is in parentheses):
+    options:
+      - "Idle"            # Σε αναμονή
+      - "Heating"         # Θέρμανση
+      - "Target reached"  # Στόχος
+      - "Blocked"         # Μπλοκαρισμένο
+      - "Solar skip"      # Παράλειψη ηλιακού
+      - "Defrost"         # Defrost
+      - "Boost"           # Boost
+
+input_datetime:
+  water_heater_on:
+    name: "GSW: Water heater last on (Τελευταία ενεργοποίηση θερμοσίφωνα)"
+    has_date: true
+    has_time: true
+    icon: mdi:calendar-clock

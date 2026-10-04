@@ -1,0 +1,785 @@
+blueprint:
+  name: "🔥 GSW: Smart Hot Water ELITE"
+  description: >
+    [EN] Smart electric water heater / solar boiler controller for Home Assistant.
+
+    • Water temperature control: turns the boiler off when the target is reached.
+    • Cold / warm logic based on outdoor temperature (separate target temp AND
+      separate max run time for each).
+    • Safety maximum run time for cold and warm weather.
+    • Presence check: heating only runs when at least one selected person is in
+      one of the selected zones (optional user 2).
+    • Defrost for solar collectors with a time window (supports past-midnight).
+    • Up to 3 hot-water schedules, each with its own enable switch and target
+      temperature (0 = automatic).
+    • Solar support: skip heating using a flag and/or the collector temperature
+      (choose off / flag / temperature / both).
+    • Manual boost: heat immediately from a button, with its own target and time.
+    • Live status + progress helpers (input_select / input_number / input_datetime).
+    • All entities are selected from the UI - no code required.
+    • Bilingual labels (Greek / English).
+
+    [EL] Έξυπνος έλεγχος θερμοσίφωνα / ηλιακού για Home Assistant.
+
+    • Έλεγχος θερμοκρασίας νερού: σβήνει όταν φτάσει τον στόχο.
+    • Λογική κρύου / ήπιου καιρού με βάση την εξωτερική θερμοκρασία
+      (ξεχωριστός στόχος ΚΑΙ ξεχωριστός μέγιστος χρόνος για κάθε περίπτωση).
+    • Μέγιστος χρόνος ασφαλείας για κρύο και ήπιο καιρό.
+    • Έλεγχος παρουσίας: ανάβει μόνο αν ένας από τους επιλεγμένους χρήστες
+      βρίσκεται σε μία από τις επιλεγμένες ζώνες (προαιρετικός χρήστης 2).
+    • Defrost ηλιακού με χρονικό παράθυρο (υποστηρίζει και πέρασμα μεσάνυχτα).
+    • Έως 3 προγράμματα ζεστού νερού, το καθένα με δικό του διακόπτη
+      ενεργοποίησης και θερμοκρασία στόχο (0 = αυτόματο).
+    • Υποστήριξη ηλιακού: παράλειψη θέρμανσης με flag ή/και θερμοκρασία
+      συλλέκτη (επιλογή: off / flag / temperature / both).
+    • Χειροκίνητο boost: άμεσο άναμμα από κουμπί, με δικό του στόχο και χρόνο.
+    • Ζωντανή κατάσταση + πρόοδος (input_select / input_number / input_datetime).
+    • Όλες οι οντότητες επιλέγονται από το UI - χωρίς κώδικα.
+    • Δίγλωσσες ετικέτες (Ελληνικά / Αγγλικά).
+
+    👨‍💻 Developer: Iakovos Venieris
+    📡 Project: Greece Sky and Weather
+    ▶ https://www.youtube.com/@GreeceSkyandWeather
+  domain: automation
+  source_url: https://github.com/Iakovosv/Smart-Hot-Water-v14-ELITE
+  author: Iakovos Venieris (Greece Sky and Weather)
+
+  input:
+    # ------------------------------------------------------------------ #
+    # Master / safety
+    # ------------------------------------------------------------------ #
+    master_enable:
+      name: Master enable (Ενεργοποίηση αυτοματισμού)
+      description: >
+        [EN] Main on/off switch. When off, the automation does nothing.
+        [EL] Γενικός διακόπτης. Όταν είναι off, ο αυτοματισμός δεν κάνει τίποτα.
+      default: input_boolean.gsw_smart_hotwater_enable
+      selector:
+        entity:
+          domain: input_boolean
+
+    boiler_switch:
+      name: Boiler switch (Διακόπτης θερμοσίφωνα)
+      description: "[EN] Switch that powers the water heater. [EL] Ο διακόπτης που τροφοδοτεί τον θερμοσίφωνα."
+      selector:
+        entity:
+          domain: switch
+
+    water_temp_sensor:
+      name: Water temperature sensor (Αισθητήρας θερμοκρασίας νερού)
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+
+    outdoor_temp_sensor:
+      name: Outdoor temperature sensor (Αισθητήρας εξωτερικής θερμοκρασίας)
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+
+    water_temperature_check:
+      name: Water temperature check - block heating when ON (Μπλοκάρισμα θέρμανσης)
+      description: >
+        [EN] When this is ON, heating is blocked. Leave empty to disable.
+        [EL] Όταν είναι ON, η θέρμανση μπλοκάρεται. Άφησέ το κενό για απενεργοποίηση.
+      default: input_boolean.water_temperature_check
+      selector:
+        entity:
+          domain: input_boolean
+
+    # ------------------------------------------------------------------ #
+    # Presence
+    # ------------------------------------------------------------------ #
+    user_1:
+      name: User 1 (Χρήστης 1)
+      description: "[EN] Required person. [EL] Υποχρεωτικός χρήστης."
+      selector:
+        entity:
+          domain: person
+
+    user_1_zones:
+      name: User 1 zones (Ζώνες χρήστη 1)
+      selector:
+        entity:
+          domain: zone
+          multiple: true
+
+    user_2:
+      name: User 2 - optional (Χρήστης 2 - προαιρετικός)
+      default: ""
+      selector:
+        entity:
+          domain: person
+
+    user_2_zones:
+      name: User 2 zones - optional (Ζώνες χρήστη 2 - προαιρετικές)
+      default: []
+      selector:
+        entity:
+          domain: zone
+          multiple: true
+
+    require_presence:
+      name: Require presence (Απαίτηση παρουσίας)
+      description: >
+        [EN] When ON, heating only runs when a selected person is in a selected zone.
+        [EL] Όταν είναι ON, η θέρμανση τρέχει μόνο όταν κάποιος χρήστης είναι σε επιλεγμένη ζώνη.
+      default: true
+      selector:
+        boolean: {}
+
+    # ------------------------------------------------------------------ #
+    # Cold / warm logic
+    # ------------------------------------------------------------------ #
+    cold_threshold:
+      name: Cold threshold - °C (Όριο κρύου - °C)
+      description: >
+        [EN] Outdoor temperature below this value is treated as "cold".
+        [EL] Εξωτερική θερμοκρασία κάτω από αυτή τη τιμή θεωρείται «κρύο».
+      default: 16
+      selector:
+        number:
+          min: -5
+          max: 30
+          step: 1
+          unit_of_measurement: "°C"
+
+    target_temp_cold:
+      name: Target temp - cold °C (Στόχος - κρύο °C)
+      default: 58
+      selector:
+        number:
+          min: 25
+          max: 70
+          step: 1
+          unit_of_measurement: "°C"
+
+    target_temp_warm:
+      name: Target temp - warm °C (Στόχος - ήπιος °C)
+      default: 50
+      selector:
+        number:
+          min: 25
+          max: 70
+          step: 1
+          unit_of_measurement: "°C"
+
+    max_time_cold:
+      name: Max run time - cold (min) (Μέγιστος χρόνος - κρύο)
+      default: 70
+      selector:
+        number:
+          min: 10
+          max: 180
+          step: 5
+          unit_of_measurement: min
+
+    max_time_warm:
+      name: Max run time - warm (min) (Μέγιστος χρόνος - ήπιος)
+      default: 55
+      selector:
+        number:
+          min: 10
+          max: 180
+          step: 5
+          unit_of_measurement: min
+
+    # ------------------------------------------------------------------ #
+    # Schedules
+    # ------------------------------------------------------------------ #
+    schedule_1_enabled:
+      name: Schedule 1 enabled (Πρόγραμμα 1 ενεργό)
+      default: false
+      selector:
+        boolean: {}
+    schedule_1_time:
+      name: Schedule 1 time (Ώρα προγράμματος 1)
+      default: "06:00:00"
+      selector:
+        time: {}
+    schedule_1_temp:
+      name: Schedule 1 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 70
+          step: 1
+          unit_of_measurement: "°C"
+
+    schedule_2_enabled:
+      name: Schedule 2 enabled (Πρόγραμμα 2 ενεργό)
+      default: false
+      selector:
+        boolean: {}
+    schedule_2_time:
+      name: Schedule 2 time (Ώρα προγράμματος 2)
+      default: "00:00:00"
+      selector:
+        time: {}
+    schedule_2_temp:
+      name: Schedule 2 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 70
+          step: 1
+          unit_of_measurement: "°C"
+
+    schedule_3_enabled:
+      name: Schedule 3 enabled (Πρόγραμμα 3 ενεργό)
+      default: false
+      selector:
+        boolean: {}
+    schedule_3_time:
+      name: Schedule 3 time (Ώρα προγράμματος 3)
+      default: "00:00:00"
+      selector:
+        time: {}
+    schedule_3_temp:
+      name: Schedule 3 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 70
+          step: 1
+          unit_of_measurement: "°C"
+
+    # ------------------------------------------------------------------ #
+    # Solar
+    # ------------------------------------------------------------------ #
+    solar_mode:
+      name: Solar skip mode (Λειτουργία παράλειψης ηλιακού)
+      description: >
+        [EN] off = always heat, flag = skip when flag is ON,
+        temperature = skip when collector temp is at/above threshold,
+        both = skip when flag OR temperature condition is met.
+        [EL] off = πάντα θέρμανση, flag = παράλειψη όταν το flag είναι ON,
+        temperature = παράλειψη όταν η θερμοκρασία συλλέκτη είναι στο/πάνω από το όριο,
+        both = παράλειψη όταν ισχύει το flag Ή η θερμοκρασία.
+      default: "off"
+      selector:
+        select:
+          options:
+            - "off"
+            - "flag"
+            - "temperature"
+            - "both"
+
+    solar_flag:
+      name: Solar skip boolean (Boolean παράλειψης ηλιακού)
+      description: "[EN] Used when mode is flag or both. [EL] Χρησιμοποιείται όταν η λειτουργία είναι flag ή both."
+      default: ""
+      selector:
+        entity:
+          domain: input_boolean
+
+    solar_temp_sensor:
+      name: Solar collector temp sensor (Αισθητήρας θερμοκρασίας συλλέκτη)
+      description: "[EN] Used when mode is temperature or both. [EL] Χρησιμοποιείται όταν η λειτουργία είναι temperature ή both."
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+
+    solar_temp_threshold:
+      name: Solar collector threshold °C (Όριο θερμοκρασίας συλλέκτη °C)
+      description: >
+        [EN] Skip heating when collector temp is at or above this value.
+        [EL] Παράλειψη θέρμανσης όταν η θερμοκρασία συλλέκτη είναι ίση ή πάνω από αυτή τη τιμή.
+      default: 45
+      selector:
+        number:
+          min: 20
+          max: 120
+          step: 1
+          unit_of_measurement: "°C"
+
+    # ------------------------------------------------------------------ #
+    # Defrost
+    # ------------------------------------------------------------------ #
+    defrost_enable:
+      name: Enable defrost (Ενεργοποίηση defrost)
+      default: false
+      selector:
+        boolean: {}
+
+    defrost_water_temp:
+      name: Defrost water temp °C (Θερμοκρασία νερού defrost °C)
+      default: 4
+      selector:
+        number:
+          min: 0
+          max: 50
+          step: 1
+          unit_of_measurement: "°C"
+
+    defrost_outdoor_temp:
+      name: Defrost outdoor temp °C (Εξωτερική θερμοκρασία defrost °C)
+      default: 2
+      selector:
+        number:
+          min: -10
+          max: 20
+          step: 1
+          unit_of_measurement: "°C"
+
+    defrost_start_time:
+      name: Defrost start time (Ώρα έναρξης defrost)
+      default: "03:00:00"
+      selector:
+        time: {}
+
+    defrost_end_time:
+      name: Defrost end time (Ώρα λήξης defrost)
+      default: "05:00:00"
+      selector:
+        time: {}
+
+    defrost_check_interval:
+      name: Defrost interval (min) (Διάρκεια defrost σε λεπτά)
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: min
+
+    # ------------------------------------------------------------------ #
+    # Manual boost
+    # ------------------------------------------------------------------ #
+    boost_button:
+      name: Boost button (Κουμπί boost)
+      description: "[EN] Pressing it heats immediately. [EL] Πατώντας το, θερμαίνει άμεσα."
+      default: input_button.gsw_hotwater_boost
+      selector:
+        entity:
+          domain: input_button
+
+    boost_target_temp:
+      name: Boost target temp (Στόχος boost - input_number)
+      default: input_number.gsw_boost_target_temp
+      selector:
+        entity:
+          domain: input_number
+
+    boost_minutes:
+      name: Boost max minutes (Μέγιστα λεπτά boost - input_number)
+      default: input_number.gsw_boost_minutes
+      selector:
+        entity:
+          domain: input_number
+
+    # ------------------------------------------------------------------ #
+    # Status helpers (live feedback)
+    # ------------------------------------------------------------------ #
+    status_entity:
+      name: Status helper (input_select κατάστασης)
+      description: >
+        [EN] Live status text. Leave empty to disable. Options must be:
+        Idle, Heating, Target reached, Blocked, Solar skip, Defrost, Boost.
+        [EL] Ζωντανό κείμενο κατάστασης. Άφησέ το κενό για απενεργοποίηση.
+        Οι επιλογές πρέπει να είναι: Idle, Heating, Target reached, Blocked,
+        Solar skip, Defrost, Boost.
+      default: input_select.gsw_hotwater_status
+      selector:
+        entity:
+          domain: input_select
+
+    progress_entity:
+      name: Progress helper (input_number προόδου 0-100)
+      description: "[EN] Heating progress percent. Leave empty to disable. [EL] Ποσοστό προόδου θέρμανσης. Κενό για απενεργοποίηση."
+      default: input_number.gsw_hotwater_progress
+      selector:
+        entity:
+          domain: input_number
+
+    last_on_entity:
+      name: Last heating timestamp (input_datetime τελευταίας θέρμανσης)
+      description: "[EN] Timestamp of the last heating start. Leave empty to disable. [EL] Χρόνος τελευταίας έναρξης θέρμανσης. Κενό για απενεργοποίηση."
+      default: input_datetime.water_heater_on
+      selector:
+        entity:
+          domain: input_datetime
+
+mode: single
+max_exceeded: silent
+
+variables:
+  # Entities
+  master_enable_entity: !input master_enable
+  boiler_switch_entity: !input boiler_switch
+  water_temp_sensor_entity: !input water_temp_sensor
+  outdoor_temp_sensor_entity: !input outdoor_temp_sensor
+  water_temp_check_entity: !input water_temperature_check
+
+  user_1_entity: !input user_1
+  user_1_zones_list: !input user_1_zones
+  user_2_entity: !input user_2
+  user_2_zones_list: !input user_2_zones
+  require_presence_val: !input require_presence
+
+  # Cold / warm
+  cold_threshold_val: !input cold_threshold
+  cold_temp: !input target_temp_cold
+  warm_temp: !input target_temp_warm
+  max_cold_time: !input max_time_cold
+  max_warm_time: !input max_time_warm
+
+  # Schedules
+  sched_enabled:
+    - !input schedule_1_enabled
+    - !input schedule_2_enabled
+    - !input schedule_3_enabled
+  sched_times:
+    - !input schedule_1_time
+    - !input schedule_2_time
+    - !input schedule_3_time
+  sched_temps:
+    - !input schedule_1_temp
+    - !input schedule_2_temp
+    - !input schedule_3_temp
+
+  # Solar
+  solar_mode_val: !input solar_mode
+  solar_flag_entity: !input solar_flag
+  solar_temp_sensor_entity: !input solar_temp_sensor
+  solar_temp_threshold_val: !input solar_temp_threshold
+
+  # Defrost
+  defrost_enabled: !input defrost_enable
+  defrost_start: !input defrost_start_time
+  defrost_end: !input defrost_end_time
+  defrost_water: !input defrost_water_temp
+  defrost_outdoor: !input defrost_outdoor_temp
+  defrost_interval: !input defrost_check_interval
+
+  # Boost
+  boost_button_entity: !input boost_button
+  boost_target_entity: !input boost_target_temp
+  boost_minutes_entity: !input boost_minutes
+
+  # Status helpers
+  status_entity: !input status_entity
+  progress_entity: !input progress_entity
+  last_on_entity: !input last_on_entity
+
+trigger:
+  - platform: time_pattern
+    minutes: "/5"
+    id: tick
+  - platform: state
+    entity_id: !input boost_button
+    id: boost
+
+condition: []
+
+action:
+  - choose:
+      # ============================================================== #
+      # BOOST - immediate manual heating
+      # ============================================================== #
+      - conditions:
+          - condition: trigger
+            id: boost
+        sequence:
+          - if:
+              - condition: state
+                entity_id: !input master_enable
+                state: "on"
+            then:
+              - variables:
+                  boost_target: "{{ states(boost_target_entity) | float(warm_temp) }}"
+                  boost_max: "{{ states(boost_minutes_entity) | float(max_warm_time) }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ is_state(boiler_switch_entity, 'on') }}"
+                then:
+                  - stop: "Boiler already heating (or already on)"
+              - if:
+                  - condition: template
+                    value_template: "{{ states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}"
+                then:
+                  - stop: "Water temperature sensor unavailable"
+              - if:
+                  - condition: template
+                    value_template: "{{ is_state(water_temp_check_entity, 'on') }}"
+                then:
+                  - stop: "Heating blocked by water temperature check"
+              - service: switch.turn_on
+                target:
+                  entity_id: !input boiler_switch
+              - if:
+                  - condition: template
+                    value_template: "{{ last_on_entity not in ['', none] }}"
+                then:
+                  - service: input_datetime.set_datetime
+                    target:
+                      entity_id: !input last_on_entity
+                    data:
+                      datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ status_entity not in ['', none] }}"
+                then:
+                  - service: input_select.select_option
+                    target:
+                      entity_id: !input status_entity
+                    data:
+                      option: "Boost"
+              - variables:
+                  heat_start: "{{ now().timestamp() }}"
+              - repeat:
+                  sequence:
+                    - if:
+                        - condition: template
+                          value_template: "{{ progress_entity not in ['', none] }}"
+                      then:
+                        - service: input_number.set_value
+                          target:
+                            entity_id: !input progress_entity
+                          data:
+                            value: >-
+                              {{ ([[ ((states(water_temp_sensor_entity) | float(0)) / (boost_target | float(1)) * 100) | round(0), 100 ] | min, 0] | max) | int }}
+                    - delay:
+                        seconds: 30
+                  until:
+                    - condition: template
+                      value_template: >-
+                        {{ (states(water_temp_sensor_entity) | float(0)) >= boost_target
+                           or (now().timestamp() - heat_start) / 60 >= boost_max
+                           or is_state(water_temp_check_entity, 'on')
+                           or states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}
+              - service: switch.turn_off
+                target:
+                  entity_id: !input boiler_switch
+              - if:
+                  - condition: template
+                    value_template: "{{ status_entity not in ['', none] }}"
+                then:
+                  - service: input_select.select_option
+                    target:
+                      entity_id: !input status_entity
+                    data:
+                      option: >-
+                        {{ 'Target reached' if (states(water_temp_sensor_entity) | float(0)) >= boost_target else 'Idle' }}
+            else:
+              - stop: "Master switch is off"
+
+      # ============================================================== #
+      # TICK (every 5 minutes) - defrost + schedules
+      # ============================================================== #
+      - conditions:
+          - condition: trigger
+            id: tick
+        sequence:
+          - choose:
+              # Master switch off -> report blocked
+              - conditions:
+                  - condition: template
+                    value_template: "{{ not is_state(master_enable_entity, 'on') }}"
+                sequence:
+                  - if:
+                      - condition: template
+                        value_template: "{{ status_entity not in ['', none] }}"
+                    then:
+                      - service: input_select.select_option
+                        target:
+                          entity_id: !input status_entity
+                        data:
+                          option: "Blocked"
+              # Master switch on -> normal operation
+              - conditions:
+                  - condition: template
+                    value_template: "{{ is_state(master_enable_entity, 'on') }}"
+                sequence:
+                  # ---------------------------------------------------- #
+                  # DEFROST
+                  # ---------------------------------------------------- #
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: >-
+                              {% if not defrost_enabled %}
+                                {{ false }}
+                              {% else %}
+                                {% set now_t = now().time() %}
+                                {% set start = today_at(defrost_start).time() %}
+                                {% set end = today_at(defrost_end).time() %}
+                                {% set w = states(water_temp_sensor_entity) | float(0) %}
+                                {% set o = states(outdoor_temp_sensor_entity) | float(0) %}
+                                {% set in_window = (start <= now_t <= end) if start <= end else (now_t >= start or now_t <= end) %}
+                                {{ in_window
+                                   and w <= defrost_water
+                                   and o <= defrost_outdoor
+                                   and not is_state(water_temp_check_entity, 'on')
+                                   and states(water_temp_sensor_entity) not in ['unknown','unavailable','none','']
+                                   and not is_state(boiler_switch_entity, 'on') }}
+                              {% endif %}
+                        sequence:
+                          - if:
+                              - condition: template
+                                value_template: "{{ status_entity not in ['', none] }}"
+                            then:
+                              - service: input_select.select_option
+                                target:
+                                  entity_id: !input status_entity
+                                data:
+                                  option: "Defrost"
+                          - service: switch.turn_on
+                            target:
+                              entity_id: !input boiler_switch
+                          - delay:
+                              minutes: "{{ defrost_interval }}"
+                          - service: switch.turn_off
+                            target:
+                              entity_id: !input boiler_switch
+                          - if:
+                              - condition: template
+                                value_template: "{{ status_entity not in ['', none] }}"
+                            then:
+                              - service: input_select.select_option
+                                target:
+                                  entity_id: !input status_entity
+                                data:
+                                  option: "Idle"
+
+                  # ---------------------------------------------------- #
+                  # SCHEDULES
+                  # ---------------------------------------------------- #
+                  - repeat:
+                      count: 3
+                      sequence:
+                        - variables:
+                            sch_on: "{{ sched_enabled[repeat.index - 1] }}"
+                            sch_time: "{{ sched_times[repeat.index - 1] }}"
+                            sch_temp: "{{ sched_temps[repeat.index - 1] }}"
+                            now_out: "{{ states(outdoor_temp_sensor_entity) | float(0) }}"
+                            target_temp: >-
+                              {% if sch_temp | float(0) > 0 %}
+                                {{ sch_temp | float(0) }}
+                              {% else %}
+                                {{ cold_temp if now_out < cold_threshold_val else warm_temp }}
+                              {% endif %}
+                            max_time_val: >-
+                              {{ max_cold_time if now_out < cold_threshold_val else max_warm_time }}
+                            presence_ok: >-
+                              {% if not require_presence_val %}
+                                {{ true }}
+                              {% else %}
+                                {% set ns = namespace(here=false) %}
+                                {% for z in user_1_zones_list %}
+                                  {% if states(user_1_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
+                                    {% set ns.here = true %}
+                                  {% endif %}
+                                {% endfor %}
+                                {% if user_2_entity not in ['', none] %}
+                                  {% for z in user_2_zones_list %}
+                                    {% if states(user_2_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
+                                      {% set ns.here = true %}
+                                    {% endif %}
+                                  {% endfor %}
+                                {% endif %}
+                                {{ ns.here }}
+                              {% endif %}
+                            solar_skip: >-
+                              {% if solar_mode_val == 'off' %}
+                                {{ false }}
+                              {% elif solar_mode_val == 'flag' %}
+                                {{ is_state(solar_flag_entity, 'on') if solar_flag_entity not in ['', none] else false }}
+                              {% elif solar_mode_val == 'temperature' %}
+                                {{ (states(solar_temp_sensor_entity) | float(-999)) >= solar_temp_threshold_val if solar_temp_sensor_entity not in ['', none] else false }}
+                              {% elif solar_mode_val == 'both' %}
+                                {% set f = is_state(solar_flag_entity, 'on') if solar_flag_entity not in ['', none] else false %}
+                                {% set t = (states(solar_temp_sensor_entity) | float(-999)) >= solar_temp_threshold_val if solar_temp_sensor_entity not in ['', none] else false %}
+                                {{ f or t }}
+                              {% else %}
+                                {{ false }}
+                              {% endif %}
+
+                        # --- Gate conditions ---
+                        - condition: template
+                          value_template: "{{ sch_on | bool }}"
+                        - condition: template
+                          value_template: >-
+                            {% set now_t = now().time() %}
+                            {% set st = today_at(sch_time).time() %}
+                            {% set delta = (now_t.hour * 60 + now_t.minute) - (st.hour * 60 + st.minute) %}
+                            {{ 0 <= delta < 5 }}
+                        - condition: template
+                          value_template: "{{ presence_ok }}"
+                        - condition: template
+                          value_template: "{{ states(water_temp_sensor_entity) not in ['unknown','unavailable','none',''] }}"
+                        - condition: template
+                          value_template: "{{ not is_state(water_temp_check_entity, 'on') }}"
+                        - condition: template
+                          value_template: "{{ not solar_skip }}"
+                        - condition: template
+                          value_template: "{{ (states(water_temp_sensor_entity) | float(0)) < (target_temp | float(0)) }}"
+                        - condition: template
+                          value_template: "{{ not is_state(boiler_switch_entity, 'on') }}"
+
+                        # --- Heat ---
+                        - service: switch.turn_on
+                          target:
+                            entity_id: !input boiler_switch
+                        - if:
+                            - condition: template
+                              value_template: "{{ last_on_entity not in ['', none] }}"
+                          then:
+                            - service: input_datetime.set_datetime
+                              target:
+                                entity_id: !input last_on_entity
+                              data:
+                                datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+                        - if:
+                            - condition: template
+                              value_template: "{{ status_entity not in ['', none] }}"
+                          then:
+                            - service: input_select.select_option
+                              target:
+                                entity_id: !input status_entity
+                              data:
+                                option: "Heating"
+                        - variables:
+                            heat_start: "{{ now().timestamp() }}"
+                        - repeat:
+                            sequence:
+                              - if:
+                                  - condition: template
+                                    value_template: "{{ progress_entity not in ['', none] }}"
+                                then:
+                                  - service: input_number.set_value
+                                    target:
+                                      entity_id: !input progress_entity
+                                    data:
+                                      value: >-
+                                        {{ ([[ ((states(water_temp_sensor_entity) | float(0)) / (target_temp | float(1)) * 100) | round(0), 100 ] | min, 0] | max) | int }}
+                              - delay:
+                                  seconds: 30
+                            until:
+                              - condition: template
+                                value_template: >-
+                                  {{ (states(water_temp_sensor_entity) | float(0)) >= (target_temp | float(0))
+                                     or (now().timestamp() - heat_start) / 60 >= (max_time_val | float(0))
+                                     or is_state(water_temp_check_entity, 'on')
+                                     or states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}
+                        - service: switch.turn_off
+                          target:
+                            entity_id: !input boiler_switch
+                        - if:
+                            - condition: template
+                              value_template: "{{ status_entity not in ['', none] }}"
+                          then:
+                            - service: input_select.select_option
+                              target:
+                                entity_id: !input status_entity
+                              data:
+                                option: >-
+                                  {{ 'Target reached' if (states(water_temp_sensor_entity) | float(0)) >= (target_temp | float(0)) else 'Idle' }}

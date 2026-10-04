@@ -1,0 +1,125 @@
+blueprint:
+  name: "🛡️ GSW: Boiler Safety Watchdog (Ασφάλεια θερμοσίφωνα)"
+  description: >
+    [EN] Independent safety watchdog for the water heater. Keep this automation
+    ALWAYS ENABLED, even if you disable the main Smart Hot Water automation.
+
+    If the boiler stays ON longer than the maximum allowed time, it is forced
+    OFF and (optionally) a notification is sent. This protects against:
+    • the main automation being stopped, edited or crashing;
+    • a stuck water temperature sensor;
+    • a schedule/boost that never reaches its target;
+    • Home Assistant restarts in the middle of heating.
+
+    [EL] Ανεξάρτητος διακόπτης ασφαλείας για τον θερμοσίφωνα. Κράτα αυτόν τον
+    αυτοματισμό ΠΑΝΤΑ ΕΝΕΡΓΟ, ακόμη κι αν απενεργοποιήσεις τον κύριο
+    αυτοματισμό Smart Hot Water.
+
+    Αν ο θερμοσίφωνας μείνει αναμμένος περισσότερο από τον μέγιστο επιτρεπτό
+    χρόνο, σβήνει με το ζόρι και (προαιρετικά) στέλνεται ειδοποίηση. Προστατεύει από:
+    • τον κύριο αυτοματισμό να σταματήσει, να τροποποιηθεί ή να «πέσει»·
+    • αισθητήρα θερμοκρασίας νερού κολλημένο·
+    • πρόγραμμα/boost που δεν φτάνει ποτέ τον στόχο·
+    • επανεκκίνηση του Home Assistant στη μέση της θέρμανσης.
+
+    👨‍💻 Developer: Iakovos Venieris
+    📡 Project: Greece Sky and Weather
+    ▶ https://www.youtube.com/@GreeceSkyandWeather
+  domain: automation
+  source_url: https://github.com/Iakovosv/Smart-Hot-Water-v14-ELITE
+  author: Iakovos Venieris (Greece Sky and Weather)
+
+  input:
+    boiler_switch:
+      name: Boiler switch (Διακόπτης θερμοσίφωνα)
+      description: "[EN] The same switch used by the main automation. [EL] Ο ίδιος διακόπτης με τον κύριο αυτοματισμό."
+      selector:
+        entity:
+          domain: switch
+
+    max_on_minutes:
+      name: Max ON time (min) (Μέγιστος χρόνος αναμμένος)
+      description: >
+        [EN] Hard limit. If the boiler is still ON after this many minutes it is
+        forced off. Set it a bit higher than the main automation's max run time.
+        [EL] Απόλυτο όριο. Αν ο θερμοσίφωνας είναι ακόμη αναμμένος μετά από τόσα
+        λεπτά, σβήνει με το ζόρι. Βάλ' το λίγο πάνω από τον μέγιστο χρόνο του
+        κύριου αυτοματισμού.
+      default: 120
+      selector:
+        number:
+          min: 10
+          max: 360
+          step: 5
+          unit_of_measurement: min
+
+    status_entity:
+      name: Status helper - optional (input_select κατάστασης - προαιρετικό)
+      description: >
+        [EN] If set, it is switched to "Blocked" when the watchdog fires.
+        [EL] Αν οριστεί, γίνεται "Blocked" όταν ενεργοποιηθεί ο watchdog.
+      default: ""
+      selector:
+        entity:
+          domain: input_select
+
+    notify_service:
+      name: Notify service - optional (Υπηρεσία ειδοποίησης - προαιρετική)
+      description: >
+        [EN] e.g. notify.iphone_iakovos. Leave empty to disable notifications.
+        [EL] π.χ. notify.iphone_iakovos. Κενό για απενεργοποίηση ειδοποιήσεων.
+      default: ""
+      selector:
+        text:
+
+mode: single
+max_exceeded: silent
+
+variables:
+  boiler_switch_entity: !input boiler_switch
+  max_on_minutes_val: !input max_on_minutes
+  status_entity: !input status_entity
+  notify_service_val: !input notify_service
+
+trigger:
+  - platform: time_pattern
+    minutes: "/5"
+
+condition: []
+
+action:
+  - if:
+      - condition: template
+        value_template: "{{ is_state(boiler_switch_entity, 'on') }}"
+    then:
+      - variables:
+          on_minutes: >-
+            {{ ((now().timestamp() - as_timestamp(states[boiler_switch_entity].last_changed)) / 60) | round(1) }}
+      - if:
+          - condition: template
+            value_template: "{{ on_minutes >= (max_on_minutes_val | float(0)) }}"
+        then:
+          - service: switch.turn_off
+            target:
+              entity_id: !input boiler_switch
+          - if:
+              - condition: template
+                value_template: "{{ status_entity not in ['', none] }}"
+            then:
+              - service: input_select.select_option
+                target:
+                  entity_id: !input status_entity
+                data:
+                  option: "Blocked"
+          - if:
+              - condition: template
+                value_template: "{{ notify_service_val not in ['', none] }}"
+            then:
+              - service: "{{ notify_service_val }}"
+                data:
+                  title: "🛡️ GSW Safety"
+                  message: >-
+                    Ο θερμοσίφωνας ήταν αναμμένος {{ on_minutes }} λεπτά
+                    (όριο {{ max_on_minutes_val }}). Σβήστηκε για ασφάλεια.
+                    / The boiler was ON for {{ on_minutes }} minutes
+                    (limit {{ max_on_minutes_val }}). Forced off for safety.
