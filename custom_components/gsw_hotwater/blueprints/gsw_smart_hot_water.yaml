@@ -16,7 +16,11 @@ blueprint:
       target temperature (0 = automatic). Enable any combination - none, one,
       several or all.
     • Solar support: skip heating using a flag and/or the collector temperature
-      (choose off / flag / temperature / both).
+      (choose off / flag / temperature / both). Optional 2nd condition: skip
+      when the panel/collector temp is ABOVE its threshold (the sun will heat
+      the water).
+    • Simple threshold: heat only when the water is BELOW the temperature you
+      set per schedule (no subtraction / no hysteresis).
     • Manual boost: heat immediately from a button, with its own target and time.
     • Live status + progress helpers (input_select / input_number / input_datetime).
     • Greek boiler status helper (Θέρμανση / Αναμονή / Έτοιμο) and a reverse
@@ -43,7 +47,11 @@ blueprint:
       (0 = αυτόματο). Ενεργοποίησε όποιον συνδυασμό θέλεις - κανένα, ένα,
       πολλά ή όλα.
     • Υποστήριξη ηλιακού: παράλειψη θέρμανσης με flag ή/και θερμοκρασία
-      συλλέκτη (επιλογή: off / flag / temperature / both).
+      συλλέκτη (επιλογή: off / flag / temperature / both). Προαιρετική 2η
+      συνθήκη: παράλειψη όταν η θερμοκρασία panel/συλλέκτη είναι ΠΑΝΩ από το
+      όριο (θα το ζεστάνει ο ήλιος).
+    • Απλό όριο: θέρμανση μόνο όταν το νερό είναι ΚΑΤΩ από τη θερμοκρασία που
+      ορίζεις ανά πρόγραμμα (χωρίς αφαίρεση / χωρίς hysteresis).
     • Χειροκίνητο boost: άμεσο άναμμα από κουμπί, με δικό του στόχο και χρόνο.
     • Ζωντανή κατάσταση + πρόοδος (input_select / input_number / input_datetime).
     • Ελληνική κατάσταση λέβητα (Θέρμανση / Αναμονή / Έτοιμο) και αντίστροφη
@@ -164,7 +172,13 @@ blueprint:
           unit_of_measurement: "°C"
 
     target_temp_cold:
-      name: Target temp - cold °C (Στόχος - κρύο °C)
+      name: Auto heat-below - cold °C (Αυτόματο όριο - κρύο °C)
+      description: >
+        [EN] Used when a schedule's heat-below is 0. Heating starts only when
+        the water is below this value, on cold days.
+        [EL] Χρησιμοποιείται όταν το «Θέρμανση κάτω από» ενός προγράμματος
+        είναι 0. Η θέρμανση ξεκινά μόνο όταν το νερό είναι κάτω από αυτή την
+        τιμή, τις κρύες μέρες.
       default: 58
       selector:
         number:
@@ -174,7 +188,13 @@ blueprint:
           unit_of_measurement: "°C"
 
     target_temp_warm:
-      name: Target temp - warm °C (Στόχος - ήπιος °C)
+      name: Auto heat-below - warm °C (Αυτόματο όριο - ήπιος °C)
+      description: >
+        [EN] Used when a schedule's heat-below is 0. Heating starts only when
+        the water is below this value, on mild days.
+        [EL] Χρησιμοποιείται όταν το «Θέρμανση κάτω από» ενός προγράμματος
+        είναι 0. Η θέρμανση ξεκινά μόνο όταν το νερό είναι κάτω από αυτή την
+        τιμή, τις ήπιες μέρες.
       default: 50
       selector:
         number:
@@ -217,7 +237,12 @@ blueprint:
       selector:
         time: {}
     schedule_1_temp:
-      name: Schedule 1 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      name: Schedule 1 heat below °C - 0 = auto (Θέρμανση κάτω από °C - 0 = αυτόματο)
+      description: >
+        [EN] Heating starts only when the water is below this temperature.
+        Leave 0 to use the automatic cold/warm target.
+        [EL] Η θέρμανση ξεκινά μόνο όταν το νερό είναι κάτω από αυτή τη
+        θερμοκρασία. Άφησέ το 0 για αυτόματο στόχο (κρύο/ήπιο).
       default: 0
       selector:
         number:
@@ -237,7 +262,12 @@ blueprint:
       selector:
         time: {}
     schedule_2_temp:
-      name: Schedule 2 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      name: Schedule 2 heat below °C - 0 = auto (Θέρμανση κάτω από °C - 0 = αυτόματο)
+      description: >
+        [EN] Heating starts only when the water is below this temperature.
+        Leave 0 to use the automatic cold/warm target.
+        [EL] Η θέρμανση ξεκινά μόνο όταν το νερό είναι κάτω από αυτή τη
+        θερμοκρασία. Άφησέ το 0 για αυτόματο στόχο (κρύο/ήπιο).
       default: 0
       selector:
         number:
@@ -257,7 +287,12 @@ blueprint:
       selector:
         time: {}
     schedule_3_temp:
-      name: Schedule 3 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      name: Schedule 3 heat below °C - 0 = auto (Θέρμανση κάτω από °C - 0 = αυτόματο)
+      description: >
+        [EN] Heating starts only when the water is below this temperature.
+        Leave 0 to use the automatic cold/warm target.
+        [EL] Η θέρμανση ξεκινά μόνο όταν το νερό είναι κάτω από αυτή τη
+        θερμοκρασία. Άφησέ το 0 για αυτόματο στόχο (κρύο/ήπιο).
       default: 0
       selector:
         number:
@@ -277,7 +312,12 @@ blueprint:
       selector:
         time: {}
     schedule_4_temp:
-      name: Schedule 4 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      name: Schedule 4 heat below °C - 0 = auto (Θέρμανση κάτω από °C - 0 = αυτόματο)
+      description: >
+        [EN] Heating starts only when the water is below this temperature.
+        Leave 0 to use the automatic cold/warm target.
+        [EL] Η θέρμανση ξεκινά μόνο όταν το νερό είναι κάτω από αυτή τη
+        θερμοκρασία. Άφησέ το 0 για αυτόματο στόχο (κρύο/ήπιο).
       default: 0
       selector:
         number:
@@ -297,7 +337,12 @@ blueprint:
       selector:
         time: {}
     schedule_5_temp:
-      name: Schedule 5 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      name: Schedule 5 heat below °C - 0 = auto (Θέρμανση κάτω από °C - 0 = αυτόματο)
+      description: >
+        [EN] Heating starts only when the water is below this temperature.
+        Leave 0 to use the automatic cold/warm target.
+        [EL] Η θέρμανση ξεκινά μόνο όταν το νερό είναι κάτω από αυτή τη
+        θερμοκρασία. Άφησέ το 0 για αυτόματο στόχο (κρύο/ήπιο).
       default: 0
       selector:
         number:
@@ -317,7 +362,12 @@ blueprint:
       selector:
         time: {}
     schedule_6_temp:
-      name: Schedule 6 target temp - 0 = auto (Στόχος - 0 = αυτόματο)
+      name: Schedule 6 heat below °C - 0 = auto (Θέρμανση κάτω από °C - 0 = αυτόματο)
+      description: >
+        [EN] Heating starts only when the water is below this temperature.
+        Leave 0 to use the automatic cold/warm target.
+        [EL] Η θέρμανση ξεκινά μόνο όταν το νερό είναι κάτω από αυτή τη
+        θερμοκρασία. Άφησέ το 0 για αυτόματο στόχο (κρύο/ήπιο).
       default: 0
       selector:
         number:
@@ -332,12 +382,15 @@ blueprint:
     solar_mode:
       name: Solar skip mode (Λειτουργία παράλειψης ηλιακού)
       description: >
-        [EN] off = always heat, flag = skip when flag is ON,
-        temperature = skip when collector temp is at/above threshold,
-        both = skip when flag OR temperature condition is met.
-        [EL] off = πάντα θέρμανση, flag = παράλειψη όταν το flag είναι ON,
-        temperature = παράλειψη όταν η θερμοκρασία συλλέκτη είναι στο/πάνω από το όριο,
-        both = παράλειψη όταν ισχύει το flag Ή η θερμοκρασία.
+        [EN] Optional second condition. off = always heat, flag = skip when flag
+        is ON, temperature = skip when the collector/panel temp is ABOVE the
+        threshold (the sun will heat the water), both = skip when flag OR
+        temperature applies. Example: panel > 45 and water 40 -> no heating.
+        [EL] Προαιρετική δεύτερη συνθήκη. off = πάντα θέρμανση, flag = παράλειψη
+        όταν το flag είναι ON, temperature = παράλειψη όταν η θερμοκρασία
+        συλλέκτη/panel είναι ΠΑΝΩ από το όριο (θα το ζεστάνει ο ήλιος),
+        both = παράλειψη όταν ισχύει το flag Ή η θερμοκρασία. Παράδειγμα:
+        panel > 45 και νερό 40 -> δεν ανάβει.
       default: "off"
       selector:
         select:
@@ -367,8 +420,9 @@ blueprint:
     solar_temp_threshold:
       name: Solar collector threshold °C (Όριο θερμοκρασίας συλλέκτη °C)
       description: >
-        [EN] Skip heating when collector temp is at or above this value.
-        [EL] Παράλειψη θέρμανσης όταν η θερμοκρασία συλλέκτη είναι ίση ή πάνω από αυτή τη τιμή.
+        [EN] Skip heating when the collector/panel temp is ABOVE this value.
+        [EL] Παράλειψη θέρμανσης όταν η θερμοκρασία συλλέκτη/panel είναι ΠΑΝΩ
+        από αυτή τη τιμή.
       default: 45
       selector:
         number:
@@ -485,23 +539,6 @@ blueprint:
         entity:
           domain: input_datetime
 
-    hysteresis:
-      name: Reheat hysteresis °C (Υστέρηση επανάναψης °C)
-      description: >
-        [EN] After the target is reached, heating restarts only when the water
-        drops this many degrees below the target. Prevents short cycling
-        (the boiler flipping on/off every 5 minutes). 0 = restart on any drop.
-        [EL] Αφού φτάσει ο στόχος, η θέρμανση ξαναρχίζει μόνο όταν το νερό πέσει
-        τόσους βαθμούς κάτω από τον στόχο. Αποτρέπει το συχνό άναμμα/σβήσιμο
-        (short cycling). 0 = επανάναψη με την παραμικρή πτώση.
-      default: 3
-      selector:
-        number:
-          min: 0
-          max: 15
-          step: 1
-          unit_of_measurement: "°C"
-
     # ------------------------------------------------------------------ #
     # Optional notification + reason (both optional)
     # ------------------------------------------------------------------ #
@@ -522,9 +559,9 @@ blueprint:
       name: Last action reason (input_text λόγου - προαιρετικό)
       description: >
         [EN] Optional input_text helper. Stores why the last schedule action
-        happened (e.g. "sched 2: target_ok", "sched 1: heating"). Leave empty
+        happened (e.g. "sched 2: temp_ok", "sched 1: heating"). Leave empty
         to disable. [EL] Προαιρετικό input_text. Αποθηκεύει γιατί έγινε η
-        τελευταία ενέργεια προγράμματος (π.χ. "sched 2: target_ok"). Κενό για
+        τελευταία ενέργεια προγράμματος (π.χ. "sched 2: temp_ok"). Κενό για
         απενεργοποίηση.
       default: ""
       selector:
@@ -640,7 +677,6 @@ variables:
   status_entity: !input status_entity
   progress_entity: !input progress_entity
   last_on_entity: !input last_on_entity
-  hysteresis_val: !input hysteresis
   notify_target_entity: !input notify_target
   last_reason_entity: !input last_reason
   boiler_status_helper: !input boiler_status_entity
@@ -970,7 +1006,8 @@ action:
                             sch_on: "{{ sched_enabled[repeat.index - 1] }}"
                             sch_temp: "{{ sched_temps[repeat.index - 1] }}"
                             now_out: "{{ states(outdoor_temp_sensor_entity) | float(0) }}"
-                            target_temp: >-
+                            # heat_below: explicit threshold, or auto (cold/warm)
+                            heat_below: >-
                               {% if sch_temp | float(0) > 0 %}
                                 {{ sch_temp | float(0) }}
                               {% else %}
@@ -1005,10 +1042,10 @@ action:
                               {% elif solar_mode_val == 'flag' %}
                                 {{ is_state(solar_flag_entity, 'on') if solar_flag_entity not in ['', none] else false }}
                               {% elif solar_mode_val == 'temperature' %}
-                                {{ (states(solar_temp_sensor_entity) | float(-999)) >= solar_temp_threshold_val if solar_temp_sensor_entity not in ['', none] else false }}
+                                {{ (states(solar_temp_sensor_entity) | float(-999)) > solar_temp_threshold_val if solar_temp_sensor_entity not in ['', none] else false }}
                               {% elif solar_mode_val == 'both' %}
                                 {% set f = is_state(solar_flag_entity, 'on') if solar_flag_entity not in ['', none] else false %}
-                                {% set t = (states(solar_temp_sensor_entity) | float(-999)) >= solar_temp_threshold_val if solar_temp_sensor_entity not in ['', none] else false %}
+                                {% set t = (states(solar_temp_sensor_entity) | float(-999)) > solar_temp_threshold_val if solar_temp_sensor_entity not in ['', none] else false %}
                                 {{ f or t }}
                               {% else %}
                                 {{ false }}
@@ -1019,7 +1056,7 @@ action:
                               {%- elif states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] -%}sensor_bad
                               {%- elif is_state(water_temp_check_entity, 'on') -%}blocked_check
                               {%- elif solar_skip -%}solar_skip
-                              {%- elif (states(water_temp_sensor_entity) | float(0)) >= ((target_temp | float(0)) - (hysteresis_val | float(0))) -%}target_ok
+                              {%- elif (states(water_temp_sensor_entity) | float(0)) >= (heat_below | float(0)) -%}temp_ok
                               {%- elif is_state(boiler_switch_entity, 'on') -%}already_on
                               {%- else -%}heating
                               {%- endif -%}
@@ -1057,7 +1094,7 @@ action:
                         - condition: template
                           value_template: "{{ not solar_skip }}"
                         - condition: template
-                          value_template: "{{ (states(water_temp_sensor_entity) | float(0)) < ((target_temp | float(0)) - (hysteresis_val | float(0))) }}"
+                          value_template: "{{ (states(water_temp_sensor_entity) | float(0)) < (heat_below | float(0)) }}"
                         - condition: template
                           value_template: "{{ not is_state(boiler_switch_entity, 'on') }}"
 
@@ -1125,13 +1162,13 @@ action:
                                       entity_id: !input progress_entity
                                     data:
                                       value: >-
-                                        {{ ([[ ((states(water_temp_sensor_entity) | float(0)) / (target_temp | float(1)) * 100) | round(0), 100 ] | min, 0] | max) | int }}
+                                        {{ ([[ ((states(water_temp_sensor_entity) | float(0)) / (heat_below | float(1)) * 100) | round(0), 100 ] | min, 0] | max) | int }}
                               - delay:
                                   seconds: 30
                             until:
                               - condition: template
                                 value_template: >-
-                                  {{ (states(water_temp_sensor_entity) | float(0)) >= (target_temp | float(0))
+                                  {{ (states(water_temp_sensor_entity) | float(0)) >= (heat_below | float(0))
                                      or (now().timestamp() - heat_start) / 60 >= (max_time_val | float(0))
                                      or is_state(water_temp_check_entity, 'on')
                                      or states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}
@@ -1147,7 +1184,7 @@ action:
                                 entity_id: !input status_entity
                               data:
                                 option: >-
-                                  {{ 'Target reached' if (states(water_temp_sensor_entity) | float(0)) >= (target_temp | float(0)) else 'Idle' }}
+                                  {{ 'Target reached' if (states(water_temp_sensor_entity) | float(0)) >= (heat_below | float(0)) else 'Idle' }}
                         - if:
                             - condition: template
                               value_template: "{{ notify_target_entity not in ['', none] }}"
@@ -1157,7 +1194,7 @@ action:
                                 title: "GSW Smart Hot Water"
                                 message: >-
                                   ✅ Πρόγραμμα {{ repeat.index }} ολοκληρώθηκε
-                                  (στόχος {{ target_temp }}°C, νερό
+                                  (όριο {{ heat_below }}°C, νερό
                                   {{ states(water_temp_sensor_entity) }}°C)
                         - if:
                             - condition: template
@@ -1168,7 +1205,7 @@ action:
                                 entity_id: !input boiler_status_entity
                               data:
                                 option: >-
-                                  {{ 'Έτοιμο' if (states(water_temp_sensor_entity) | float(0)) >= (target_temp | float(0)) else 'Αναμονή' }}
+                                  {{ 'Έτοιμο' if (states(water_temp_sensor_entity) | float(0)) >= (heat_below | float(0)) else 'Αναμονή' }}
                         - if:
                             - condition: template
                               value_template: "{{ time_left_helper not in ['', none] }}"

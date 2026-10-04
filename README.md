@@ -166,13 +166,13 @@ selected from the UI** — no code required.
 | `user_2` / `user_2_zones` | Χρήστης 2 (προαιρετικός) | κενό |
 | `require_presence` | Απαίτηση παρουσίας | `true` |
 | `cold_threshold` | Όριο κρύου | `16 °C` |
-| `target_temp_cold` / `target_temp_warm` | Στόχος κρύου / ήπιου | `58` / `50 °C` |
+| `target_temp_cold` / `target_temp_warm` | Αυτόματο όριο «ανάβει κάτω από» κρύου / ήπιου | `58` / `50 °C` |
 | `max_time_cold` / `max_time_warm` | Μέγιστος χρόνος κρύου / ήπιου | `70` / `55 min` |
-| `schedule_N_enabled/time/temp` | Πρόγραμμα N (1-6) ενεργό/ώρα/στόχος | off / 06:00 / 0=auto |
+| `schedule_N_enabled/time/temp` | Πρόγραμμα N (1-6) ενεργό/ώρα/**όριο ανάβει κάτω από** | off / 06:00 / 0=auto |
 | `solar_mode` | Λειτουργία ηλιακού | `off` |
 | `solar_flag` | Boolean παράλειψης ηλιακού | κενό |
-| `solar_temp_sensor` | Αισθητήρας θερμοκρασίας συλλέκτη | κενό |
-| `solar_temp_threshold` | Όριο θερμοκρασίας συλλέκτη | `45 °C` |
+| `solar_temp_sensor` | Αισθητήρας θερμοκρασίας συλλέκτη/panel (προαιρετική 2η συνθήκη) | κενό |
+| `solar_temp_threshold` | Όριο συλλέκτη/panel (παράλειψη όταν είναι **πάνω** από αυτό) | `45 °C` |
 | `defrost_enable` | Ενεργοποίηση defrost | `false` |
 | `defrost_water_temp` / `defrost_outdoor_temp` | Όρια defrost | `4` / `2 °C` |
 | `defrost_start_time` / `defrost_end_time` | Παράθυρο defrost | `03:00` / `05:00` |
@@ -187,7 +187,6 @@ selected from the UI** — no code required.
 | `boiler_status_entity` | Helper κατάστασης Ελληνικά (`input_select`) | κενό |
 | `time_left_entity` | Helper υπολοίπου λεπτών (`input_number`) | κενό |
 | `time_left_pct_entity` | Helper υπολοίπου % (`input_number`) | κενό |
-| `hysteresis` | Υστέρηση επανάναψης (αποφυγή short cycling) | `3 °C` |
 
 ### Κενά / προαιρετικά πεδία — ο αυτοματισμός δουλεύει πάντα
 
@@ -206,12 +205,47 @@ selected from the UI** — no code required.
 | `last_reason` | Δεν καταγράφεται ο λόγος της τελευταίας ενέργειας. |
 | `boiler_status_entity` | Δεν ενημερώνεται η ελληνική κατάσταση λέβητα. |
 | `time_left_entity` / `time_left_pct_entity` | Δεν ενημερώνεται η αντίστροφη μέτρηση. |
-| `hysteresis` | `3 °C` — μετά τον στόχο, επανάναψη όταν πέσει 3° κάτω (αποφυγή short cycling). |
 
 > ⚠️ **Προσοχή:** αν αφήσεις κενό `boiler_switch` ή `water_temp_sensor`, ο
 > αυτοματισμός **δεν κάνει τίποτα** (σωστά — δεν θερμαίνει «στα τυφλά»).
 > Αν έχεις `require_presence = true` με **κενές ζώνες**, δεν θερμαίνει ποτέ.
 > Αν δεν θέλεις έλεγχο τοποθεσίας, βάλε `require_presence = false`.
+
+### Θερμοκρασία: απλό όριο «ανάβει κάτω από»
+
+Δεν χρειάζεται αφαίρεση/hysteresis. Δηλώνεις **απλά**:
+
+- **Ώρα** που θέλεις να ελέγξει (`schedule_N_time`, π.χ. `16:03`)
+- **Θερμοκρασία νερού χρήσης** (`schedule_N_temp`, π.χ. `45`)
+
+Και ισχύει: **αν το νερό είναι κάτω από 45°C → ανάβει. Αν είναι 45°C ή πάνω →
+δεν ανάβει**, ακόμη κι αν ήρθε η ώρα.
+
+- `schedule_N_temp = 0` → **αυτόματο**: χρησιμοποιεί `target_temp_cold`
+  (κρύες μέρες) ή `target_temp_warm` (ήπιες), με βάση το `cold_threshold`.
+
+### Δεύτερη (προαιρετική) συνθήκη: θερμοκρασία panel/συλλέκτη
+
+Μπορείς να προσθέσεις **προαιρετικά** δεύτερη μεταβλητή — τη **θερμοκρασία
+panel/συλλέκτη** — ώστε να **μην ανάβει** όταν ο ήλιος θα ζεστάνει το νερό.
+
+| Πεδίο | Τι ορίζεις |
+|---|---|
+| `solar_temp_sensor` | Αισθητήρας θερμοκρασίας panel (κενό = απενεργοποιημένο) |
+| `solar_temp_threshold` | Ελάχιστη θερμοκρασία panel (π.χ. `45`) |
+| `solar_mode` | `temperature` (ή `both` αν θέλεις και το flag) |
+
+**Κανόνας:** παράλειψη θέρμανσης όταν `panel > solar_temp_threshold`.
+
+**Παράδειγμα (όπως το ζήτησες):**
+- Όριο νερού `45`, όριο panel `45`.
+- Panel **50°C** (πάνω από 45) και νερό **40°C** → **δεν ανάβει** (θα το
+  ζεστάνει ο ήλιος) → λόγος `solar_skip`.
+- Panel **44°C** (όχι πάνω από 45) και νερό **40°C** → **ανάβει** → `heating`.
+- Panel **45°C** ακριβώς → **δεν** παραλείπεται (χρειάζεται **πάνω** από 45).
+
+> Αν αφήσεις κενό το `solar_temp_sensor`, ο έλεγχος panel **απενεργοποιείται**
+> και ο θερμοσίφωνας θερμαίνει κανονικά (δεν κολλάει ποτέ).
 
 ### Πώς δουλεύουν τα προγράμματα / How schedules work
 
@@ -240,7 +274,7 @@ selected from the UI** — no code required.
   `input_text.gsw_last_reason`, υπάρχει στο `helpers/gsw_hotwater.yaml`).
   Καταγράφει **γιατί** έγινε η τελευταία ενέργεια, π.χ.:
   - `sched 2: heating` — θέρμανε το πρόγραμμα 2
-  - `sched 1: target_ok` — το νερό ήταν ήδη ζεστό (δεν χρειάστηκε)
+  - `sched 1: temp_ok` — το νερό ήταν ήδη στο/πάνω από το όριο (δεν χρειάστηκε)
   - `sched 3: solar_skip` — παράλειψη λόγω ηλιακού
   - `sched 4: no_presence` — δεν ήταν κάποιος στο σπίτι
   - `sched 5: sensor_bad` / `blocked_check` / `already_on` / `master_off`

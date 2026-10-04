@@ -90,10 +90,10 @@ SOLAR = """{% if solar_mode_val == 'off' %}
 {% elif solar_mode_val == 'flag' %}
   {{ is_state(solar_flag_entity, 'on') if solar_flag_entity not in ['', none] else false }}
 {% elif solar_mode_val == 'temperature' %}
-  {{ (states(solar_temp_sensor_entity) | float(-999)) >= solar_temp_threshold_val if solar_temp_sensor_entity not in ['', none] else false }}
+  {{ (states(solar_temp_sensor_entity) | float(-999)) > solar_temp_threshold_val if solar_temp_sensor_entity not in ['', none] else false }}
 {% elif solar_mode_val == 'both' %}
   {% set f = is_state(solar_flag_entity, 'on') if solar_flag_entity not in ['', none] else false %}
-  {% set t = (states(solar_temp_sensor_entity) | float(-999)) >= solar_temp_threshold_val if solar_temp_sensor_entity not in ['', none] else false %}
+  {% set t = (states(solar_temp_sensor_entity) | float(-999)) > solar_temp_threshold_val if solar_temp_sensor_entity not in ['', none] else false %}
   {{ f or t }}
 {% else %}
   {{ false }}
@@ -125,7 +125,7 @@ DEFROST = """{% if not defrost_enabled or trigger_id != 'defrost_t' %}
 
 PROGRESS = "{{ ([[ (hb_current / hb_target * 100) | round(0), 100 ] | min, 0] | max if hb_target > 0 else 0) | int }}"
 
-REHEAT = "{{ water_now < (target_temp - hysteresis_val) }}"
+HEAT_BELOW = "{{ water_now < (heat_below | float(0)) }}"
 
 REASON_TEXT = "sched {{ idx }}: {{ reason }}"
 
@@ -141,7 +141,7 @@ DECIDE = """{% if not master_on %}master_off
 {% elif water_state in ['unknown','unavailable','none',''] %}sensor_bad
 {% elif check_on %}blocked_check
 {% elif solar_skip %}solar_skip
-{% elif water_val >= (target - hyst) %}target_ok
+{% elif water_val >= heat_below %}temp_ok
 {% elif boiler_on %}already_on
 {% else %}heat{% endif %}"""
 
@@ -218,6 +218,9 @@ def test_solar() -> None:
         ("both", {"sensor.temperature_esp_outside_temperature": "50"}, True),
         ("both", {"input_boolean.solar_ok": "on"}, True),
         ("both", {"sensor.temperature_esp_outside_temperature": "10", "input_boolean.solar_ok": "off"}, False),
+        # strict "above": exactly at threshold does NOT skip
+        ("temperature", {"sensor.temperature_esp_outside_temperature": "45"}, False),
+        ("temperature", {"sensor.temperature_esp_outside_temperature": "46"}, True),
     ]
     for mode, states_map, expected in cases:
         env = _make_env(states_map, attrs, datetime(2026, 1, 1, 6, 0))
@@ -231,6 +234,27 @@ def test_solar() -> None:
         env = _make_env({}, attrs, datetime(2026, 1, 1, 6, 0))
         r = render(env, SOLAR, solar_mode_val=mode, **empty)
         check(r == "False", f"solar mode={mode} with empty entities -> no skip")
+
+
+def test_panel_vs_water() -> None:
+    print("test_panel_vs_water (panel above threshold suppresses heating)")
+    attrs = {}
+    base = dict(solar_flag_entity="input_boolean.solar_ok",
+                solar_temp_sensor_entity="sensor.panel",
+                solar_temp_threshold_val=45)
+
+    # water 40 (< heat_below 45) but panel 50 (> 45) -> skip heating
+    e = _make_env({"sensor.panel": "50"}, attrs, datetime(2026, 1, 1, 6, 0))
+    check(render(e, SOLAR, solar_mode_val="temperature", **base) == "True",
+          "water below threshold but panel above -> skip")
+    # panel not above threshold -> heat
+    e = _make_env({"sensor.panel": "40"}, attrs, datetime(2026, 1, 1, 6, 0))
+    check(render(e, SOLAR, solar_mode_val="temperature", **base) == "False",
+          "panel not above threshold -> heat")
+    # panel sensor missing/unavailable -> never skip
+    e = _make_env({"sensor.panel": "unavailable"}, attrs, datetime(2026, 1, 1, 6, 0))
+    check(render(e, SOLAR, solar_mode_val="temperature", **base) == "False",
+          "panel unavailable -> heat")
 
 
 def test_trigger_match() -> None:
@@ -299,16 +323,18 @@ def test_progress() -> None:
     check(render(env, PROGRESS, hb_current=0, hb_target=0) == "0", "zero target -> 0%")
 
 
-def test_reheat() -> None:
-    print("test_reheat (hysteresis prevents short cycling)")
+def test_heat_below() -> None:
+    print("test_heat_below (heat only when water is below the threshold)")
     env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0))
-    # target 58, hysteresis 3 -> reheat only below 55
-    check(render(env, REHEAT, water_now=57, target_temp=58, hysteresis_val=3) == "False",
-          "57 vs 58-3=55 -> no reheat")
-    check(render(env, REHEAT, water_now=54, target_temp=58, hysteresis_val=3) == "True",
-          "54 vs 55 -> reheat")
-    check(render(env, REHEAT, water_now=57.9, target_temp=58, hysteresis_val=0) == "True",
-          "hysteresis 0 -> reheat on any drop")
+    # heat_below 45: below 45 -> heat, at/above 45 -> no heat
+    check(render(env, HEAT_BELOW, water_now=44.9, heat_below=45) == "True",
+          "44.9 below 45 -> heat")
+    check(render(env, HEAT_BELOW, water_now=45, heat_below=45) == "False",
+          "exactly 45 -> no heat")
+    check(render(env, HEAT_BELOW, water_now=45.1, heat_below=45) == "False",
+          "45.1 above 45 -> no heat")
+    check(render(env, HEAT_BELOW, water_now=40, heat_below=45) == "True",
+          "40 below 45 -> heat")
 
 
 def test_scenarios() -> None:
@@ -318,7 +344,7 @@ def test_scenarios() -> None:
     def decide(**kw):
         base = dict(master_on=True, water_state="40.0", boiler_on=False,
                     check_on=False, presence_ok=True, solar_skip=False,
-                    water_val=40.0, target=55.0, hyst=3.0)
+                    water_val=40.0, heat_below=45.0)
         base.update(kw)
         return render(env, DECIDE, **base)
 
@@ -331,10 +357,10 @@ def test_scenarios() -> None:
         ("sensor empty -> sensor_bad", {"water_state": ""}, "sensor_bad"),
         ("water check on -> blocked_check", {"check_on": True}, "blocked_check"),
         ("solar skip -> solar_skip", {"solar_skip": True}, "solar_skip"),
-        ("water at target -> target_ok", {"water_val": 55.0}, "target_ok"),
-        ("water at target-hyst -> target_ok", {"water_val": 52.0}, "target_ok"),
-        ("water below target-hyst -> heat", {"water_val": 51.0}, "heat"),
-        ("hysteresis 0, any drop -> heat", {"water_val": 54.9, "hyst": 0.0}, "heat"),
+        ("water at threshold -> temp_ok", {"water_val": 45.0}, "temp_ok"),
+        ("water above threshold -> temp_ok", {"water_val": 50.0}, "temp_ok"),
+        ("water below threshold -> heat", {"water_val": 44.9}, "heat"),
+        ("water exactly at threshold -> temp_ok", {"water_val": 45.0}, "temp_ok"),
         ("boiler already on + water low -> already_on", {"boiler_on": True}, "already_on"),
         # priority: the earlier gate wins
         ("master off beats all", {"master_on": False, "presence_ok": False,
@@ -346,9 +372,9 @@ def test_scenarios() -> None:
                                           "solar_skip": True}, "sensor_bad"),
         ("check beats solar/target", {"check_on": True, "solar_skip": True,
                                       "water_val": 10.0}, "blocked_check"),
-        ("solar beats target/boiler", {"solar_skip": True, "water_val": 10.0,
+        ("solar beats temp/boiler", {"solar_skip": True, "water_val": 10.0,
                                        "boiler_on": True}, "solar_skip"),
-        ("target_ok beats boiler", {"water_val": 60.0, "boiler_on": True}, "target_ok"),
+        ("temp_ok beats boiler", {"water_val": 60.0, "boiler_on": True}, "temp_ok"),
     ]
     for label, kw, expected in cases:
         got = decide(**kw)
@@ -396,11 +422,12 @@ def test_time_left() -> None:
 def main() -> int:
     test_presence()
     test_solar()
+    test_panel_vs_water()
     test_trigger_match()
     test_target()
     test_defrost()
     test_progress()
-    test_reheat()
+    test_heat_below()
     test_scenarios()
     test_reason()
     test_time_left()
