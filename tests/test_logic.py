@@ -99,10 +99,7 @@ SOLAR = """{% if solar_mode_val == 'off' %}
   {{ false }}
 {% endif %}"""
 
-WINDOW = """{% set now_t = now().time() %}
-{% set st = today_at(sched_time).time() %}
-{% set delta = (now_t.hour * 60 + now_t.minute) - (st.hour * 60 + st.minute) %}
-{{ 0 <= delta < 1 }}"""
+TRIGGER_MATCH = "{{ trigger_id == ('sched_' ~ idx) }}"
 
 TARGET = """{% if sched_temp | float(0) > 0 %}
   {{ sched_temp }}
@@ -110,17 +107,21 @@ TARGET = """{% if sched_temp | float(0) > 0 %}
   {{ cold_temp if now_out < cold_threshold_val else warm_temp }}
 {% endif %}"""
 
-DEFROST = """{% set now_t = now().time() %}
-{% set start = today_at(defrost_start).time() %}
-{% set end = today_at(defrost_end).time() %}
-{% set o = o if outdoor_temp_sensor_entity not in ['', none] else -999 %}
-{% set in_window = (start <= now_t <= end) if start <= end else (now_t >= start or now_t <= end) %}
-{{ in_window
-   and w <= defrost_water
-   and (outdoor_temp_sensor_entity in ['', none] or o <= defrost_outdoor)
-   and not is_state(water_temp_check_entity, 'on')
-   and water_temp_state not in ['unknown','unavailable','none','']
-   and not boiler_on }}"""
+DEFROST = """{% if not defrost_enabled or trigger_id != 'defrost_t' %}
+  {{ false }}
+{% else %}
+  {% set now_t = now().time() %}
+  {% set start = today_at(defrost_start).time() %}
+  {% set end = today_at(defrost_end).time() %}
+  {% set o = o if outdoor_temp_sensor_entity not in ['', none] else -999 %}
+  {% set in_window = (start <= now_t <= end) if start <= end else (now_t >= start or now_t <= end) %}
+  {{ in_window
+     and w <= defrost_water
+     and (outdoor_temp_sensor_entity in ['', none] or o <= defrost_outdoor)
+     and not is_state(water_temp_check_entity, 'on')
+     and water_temp_state not in ['unknown','unavailable','none','']
+     and not boiler_on }}
+{% endif %}"""
 
 PROGRESS = "{{ ([[ (hb_current / hb_target * 100) | round(0), 100 ] | min, 0] | max if hb_target > 0 else 0) | int }}"
 
@@ -214,18 +215,17 @@ def test_solar() -> None:
         check(r == "False", f"solar mode={mode} with empty entities -> no skip")
 
 
-def test_window() -> None:
-    print("test_window (minute-accurate schedule match)")
-    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0))
-    check(render(env, WINDOW, sched_time="06:00:00") == "True", "06:00 matches 06:00")
-    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0, 30))
-    check(render(env, WINDOW, sched_time="06:00:00") == "True", "06:00:30 matches 06:00")
-    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 1))
-    check(render(env, WINDOW, sched_time="06:00:00") == "False", "06:01 no longer matches")
-    env = _make_env({}, {}, datetime(2026, 1, 1, 5, 59))
-    check(render(env, WINDOW, sched_time="06:00:00") == "False", "05:59 before window")
-    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 45))
-    check(render(env, WINDOW, sched_time="06:45:00") == "True", "06:45 matches 06:45 (minute precision)")
+def test_trigger_match() -> None:
+    print("test_trigger_match (exact-time trigger selects the right schedule)")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 16, 3))
+    check(render(env, TRIGGER_MATCH, trigger_id="sched_1", idx=1) == "True",
+          "sched_1 trigger matches schedule 1")
+    check(render(env, TRIGGER_MATCH, trigger_id="sched_1", idx=2) == "False",
+          "sched_1 trigger does not match schedule 2")
+    check(render(env, TRIGGER_MATCH, trigger_id="defrost_t", idx=1) == "False",
+          "defrost trigger does not match a schedule")
+    check(render(env, TRIGGER_MATCH, trigger_id="sched_6", idx=6) == "True",
+          "sched_6 trigger matches schedule 6")
 
 
 def test_target() -> None:
@@ -240,8 +240,9 @@ def test_target() -> None:
 
 
 def test_defrost() -> None:
-    print("test_defrost (time window, past-midnight, empty outdoor sensor)")
-    base = dict(defrost_start="03:00:00", defrost_end="05:00:00", defrost_water=4,
+    print("test_defrost (exact trigger, window, empty outdoor sensor)")
+    base = dict(defrost_enabled=True, trigger_id="defrost_t",
+                defrost_start="03:00:00", defrost_end="05:00:00", defrost_water=4,
                 defrost_outdoor=2, w=3, o=1,
                 outdoor_temp_sensor_entity="sensor.outdoor",
                 water_temp_check_entity="", water_temp_state="3.0", boiler_on=False)
@@ -249,6 +250,12 @@ def test_defrost() -> None:
     check(render(env, DEFROST, **base) == "True", "inside window + cold -> true")
     env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0))
     check(render(env, DEFROST, **base) == "False", "outside window -> false")
+    # wrong trigger -> defrost must not run
+    env = _make_env({}, {}, datetime(2026, 1, 1, 4, 0))
+    check(render(env, DEFROST, **dict(base, trigger_id="sched_1")) == "False",
+          "non-defrost trigger -> false")
+    check(render(env, DEFROST, **dict(base, defrost_enabled=False)) == "False",
+          "defrost disabled -> false")
     # past-midnight window 23:00 -> 02:00
     pm = dict(base, defrost_start="23:00:00", defrost_end="02:00:00")
     env = _make_env({}, {}, datetime(2026, 1, 1, 0, 30))
@@ -289,7 +296,7 @@ def test_reheat() -> None:
 def main() -> int:
     test_presence()
     test_solar()
-    test_window()
+    test_trigger_match()
     test_target()
     test_defrost()
     test_progress()

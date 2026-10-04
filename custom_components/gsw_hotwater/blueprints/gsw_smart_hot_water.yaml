@@ -9,10 +9,12 @@ blueprint:
     • Safety maximum run time for cold and warm weather.
     • Presence check: heating only runs when at least one selected person is in
       one of the selected zones (optional user 2).
-    • Defrost for solar collectors with a time window (supports past-midnight).
+    • Defrost for solar collectors with an exact start time (minute precision,
+      fires at that exact moment) and a window that bounds the duration.
     • Up to 6 hot-water schedules, each with its own enable switch, exact start
-      time (minute precision) and target temperature (0 = automatic). Enable any
-      combination - none, one, several or all.
+      time (minute precision, fires at that exact moment - no polling) and
+      target temperature (0 = automatic). Enable any combination - none, one,
+      several or all.
     • Solar support: skip heating using a flag and/or the collector temperature
       (choose off / flag / temperature / both).
     • Manual boost: heat immediately from a button, with its own target and time.
@@ -28,11 +30,13 @@ blueprint:
     • Μέγιστος χρόνος ασφαλείας για κρύο και ήπιο καιρό.
     • Έλεγχος παρουσίας: ανάβει μόνο αν ένας από τους επιλεγμένους χρήστες
       βρίσκεται σε μία από τις επιλεγμένες ζώνες (προαιρετικός χρήστης 2).
-    • Defrost ηλιακού με χρονικό παράθυρο (υποστηρίζει και πέρασμα μεσάνυχτα).
+    • Defrost ηλιακού με ακριβή ώρα έναρξης (ακρίβεια λεπτού, χωρίς polling)
+      και παράθυρο που περιορίζει τη διάρκεια.
     • Έως 6 προγράμματα ζεστού νερού, το καθένα με δικό του διακόπτη
-      ενεργοποίησης, ακριβή ώρα έναρξης (ακρίβεια λεπτού) και θερμοκρασία
-      στόχο (0 = αυτόματο). Ενεργοποίησε όποιον συνδυασμό θέλεις - κανένα,
-      ένα, πολλά ή όλα.
+      ενεργοποίησης, ακριβή ώρα έναρξης (ακρίβεια λεπτού, ενεργοποιείται
+      εκείνη ακριβώς τη στιγμή - χωρίς polling) και θερμοκρασία στόχο
+      (0 = αυτόματο). Ενεργοποίησε όποιον συνδυασμό θέλεις - κανένα, ένα,
+      πολλά ή όλα.
     • Υποστήριξη ηλιακού: παράλειψη θέρμανσης με flag ή/και θερμοκρασία
       συλλέκτη (επιλογή: off / flag / temperature / both).
     • Χειροκίνητο boost: άμεσο άναμμα από κουμπί, με δικό του στόχο και χρόνο.
@@ -561,9 +565,27 @@ variables:
   hysteresis_val: !input hysteresis
 
 trigger:
-  - platform: time_pattern
-    minutes: "/1"
-    id: tick
+  - platform: time
+    at: !input schedule_1_time
+    id: sched_1
+  - platform: time
+    at: !input schedule_2_time
+    id: sched_2
+  - platform: time
+    at: !input schedule_3_time
+    id: sched_3
+  - platform: time
+    at: !input schedule_4_time
+    id: sched_4
+  - platform: time
+    at: !input schedule_5_time
+    id: sched_5
+  - platform: time
+    at: !input schedule_6_time
+    id: sched_6
+  - platform: time
+    at: !input defrost_start_time
+    id: defrost_t
   - platform: state
     entity_id: !input boost_button
     id: boost
@@ -664,11 +686,12 @@ action:
               - stop: "Master switch is off"
 
       # ============================================================== #
-      # TICK (every 5 minutes) - defrost + schedules
+      # SCHEDULES + DEFROST - exact-time triggers (no polling)
       # ============================================================== #
       - conditions:
-          - condition: trigger
-            id: tick
+          - condition: template
+            value_template: >-
+              {{ trigger.id in ['sched_1','sched_2','sched_3','sched_4','sched_5','sched_6','defrost_t'] }}
         sequence:
           - choose:
               # Master switch off -> report blocked
@@ -697,7 +720,7 @@ action:
                       - conditions:
                           - condition: template
                             value_template: >-
-                              {% if not defrost_enabled %}
+                              {% if not defrost_enabled or trigger.id != 'defrost_t' %}
                                 {{ false }}
                               {% else %}
                                 {% set now_t = now().time() %}
@@ -749,7 +772,6 @@ action:
                       sequence:
                         - variables:
                             sch_on: "{{ sched_enabled[repeat.index - 1] }}"
-                            sch_time: "{{ sched_times[repeat.index - 1] }}"
                             sch_temp: "{{ sched_temps[repeat.index - 1] }}"
                             now_out: "{{ states(outdoor_temp_sensor_entity) | float(0) }}"
                             target_temp: >-
@@ -800,11 +822,7 @@ action:
                         - condition: template
                           value_template: "{{ sch_on | bool }}"
                         - condition: template
-                          value_template: >-
-                            {% set now_t = now().time() %}
-                            {% set st = today_at(sch_time).time() %}
-                            {% set delta = (now_t.hour * 60 + now_t.minute) - (st.hour * 60 + st.minute) %}
-                            {{ 0 <= delta < 1 }}
+                          value_template: "{{ trigger.id == ('sched_' ~ repeat.index) }}"
                         - condition: template
                           value_template: "{{ presence_ok }}"
                         - condition: template

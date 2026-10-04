@@ -80,7 +80,15 @@ def test_structure(bp: dict, name: str = "") -> None:
     if name == "gsw_smart_hot_water.yaml":
         triggers = bp.get("trigger", [])
         ids = {t.get("id") for t in triggers if isinstance(t, dict)}
-        check({"tick", "boost"} <= ids, "main blueprint triggers include tick/boost")
+        check({"sched_1", "sched_2", "sched_3", "sched_4", "sched_5", "sched_6",
+               "defrost_t", "boost"} <= ids,
+              "main blueprint has exact-time triggers for 6 schedules + defrost + boost")
+        platforms = {t.get("platform") for t in triggers if isinstance(t, dict)}
+        check("time_pattern" not in platforms,
+              "no polling trigger - schedules fire at exact times only")
+        for t in triggers:
+            if isinstance(t, dict) and t.get("platform") == "time":
+                check("at" in t, f"time trigger '{t.get('id')}' has an 'at' time")
     if name == "gsw_boiler_safety.yaml":
         check(not bp.get("condition"), "watchdog has no blocking top-level condition")
 
@@ -110,7 +118,7 @@ def test_inputs(bp: dict) -> None:
         check("name" in spec, f"input '{key}' has a name")
         check("selector" in spec, f"input '{key}' has a selector")
 
-    # Schedules: 6 independent, minute-accurate slots (main blueprint only)
+    # Schedules: 6 independent slots, each with its own exact trigger time
     if "schedule_1_enabled" in inputs:
         for i in range(1, 7):
             for suffix in ("enabled", "time", "temp"):
