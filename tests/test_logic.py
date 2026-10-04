@@ -127,6 +127,16 @@ PROGRESS = "{{ ([[ (hb_current / hb_target * 100) | round(0), 100 ] | min, 0] | 
 
 REHEAT = "{{ water_now < (target_temp - hysteresis_val) }}"
 
+# Full gate chain, in the same order as the blueprint's schedule decision.
+DECIDE = """{% if not master_on %}master_off
+{% elif not presence_ok %}no_presence
+{% elif water_state in ['unknown','unavailable','none',''] %}sensor_bad
+{% elif check_on %}blocked_check
+{% elif solar_skip %}solar_skip
+{% elif water_val >= (target - hyst) %}target_ok
+{% elif boiler_on %}already_on
+{% else %}heat{% endif %}"""
+
 
 def render(env: Environment, template: str, **ctx):
     return env.from_string(template).render(**ctx).strip()
@@ -293,6 +303,50 @@ def test_reheat() -> None:
           "hysteresis 0 -> reheat on any drop")
 
 
+def test_scenarios() -> None:
+    print("test_scenarios (full gate chain across combinations)")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 16, 3))
+
+    def decide(**kw):
+        base = dict(master_on=True, water_state="40.0", boiler_on=False,
+                    check_on=False, presence_ok=True, solar_skip=False,
+                    water_val=40.0, target=55.0, hyst=3.0)
+        base.update(kw)
+        return render(env, DECIDE, **base)
+
+    cases = [
+        ("all conditions good -> heat", {}, "heat"),
+        ("master off -> master_off", {"master_on": False}, "master_off"),
+        ("nobody home -> no_presence", {"presence_ok": False}, "no_presence"),
+        ("sensor unknown -> sensor_bad", {"water_state": "unknown"}, "sensor_bad"),
+        ("sensor unavailable -> sensor_bad", {"water_state": "unavailable"}, "sensor_bad"),
+        ("sensor empty -> sensor_bad", {"water_state": ""}, "sensor_bad"),
+        ("water check on -> blocked_check", {"check_on": True}, "blocked_check"),
+        ("solar skip -> solar_skip", {"solar_skip": True}, "solar_skip"),
+        ("water at target -> target_ok", {"water_val": 55.0}, "target_ok"),
+        ("water at target-hyst -> target_ok", {"water_val": 52.0}, "target_ok"),
+        ("water below target-hyst -> heat", {"water_val": 51.0}, "heat"),
+        ("hysteresis 0, any drop -> heat", {"water_val": 54.9, "hyst": 0.0}, "heat"),
+        ("boiler already on + water low -> already_on", {"boiler_on": True}, "already_on"),
+        # priority: the earlier gate wins
+        ("master off beats all", {"master_on": False, "presence_ok": False,
+                                  "water_state": "unknown", "solar_skip": True,
+                                  "boiler_on": True}, "master_off"),
+        ("no presence beats sensor/check", {"presence_ok": False, "water_state": "",
+                                            "check_on": True}, "no_presence"),
+        ("sensor bad beats check/solar", {"water_state": "unknown", "check_on": True,
+                                          "solar_skip": True}, "sensor_bad"),
+        ("check beats solar/target", {"check_on": True, "solar_skip": True,
+                                      "water_val": 10.0}, "blocked_check"),
+        ("solar beats target/boiler", {"solar_skip": True, "water_val": 10.0,
+                                       "boiler_on": True}, "solar_skip"),
+        ("target_ok beats boiler", {"water_val": 60.0, "boiler_on": True}, "target_ok"),
+    ]
+    for label, kw, expected in cases:
+        got = decide(**kw)
+        check(got == expected, f"{label} (got {got})")
+
+
 def main() -> int:
     test_presence()
     test_solar()
@@ -301,6 +355,7 @@ def main() -> int:
     test_defrost()
     test_progress()
     test_reheat()
+    test_scenarios()
     print()
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")
