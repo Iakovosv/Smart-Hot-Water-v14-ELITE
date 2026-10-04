@@ -154,6 +154,7 @@ selected from the UI** — no code required.
 | `progress_entity` | Helper προόδου | `input_number.gsw_hotwater_progress` |
 | `last_on_entity` | Helper τελευταίας ενεργοποίησης | `input_datetime.water_heater_on` |
 | `notify_service` | Υπηρεσία ειδοποίησης (προαιρετική) | κενό |
+| `hysteresis` | Υστέρηση επανάναψης (αποφυγή short cycling) | `3 °C` |
 
 ### Κενά / προαιρετικά πεδία — ο αυτοματισμός δουλεύει πάντα
 
@@ -168,6 +169,7 @@ selected from the UI** — no code required.
 | `solar_temp_sensor` (με mode `temperature`) | Δεν παραλείπεται θέρμανση → θερμαίνει κανονικά. |
 | `status_entity` / `progress_entity` / `last_on_entity` | Απλώς δεν ενημερώνεται ο αντίστοιχος helper. |
 | `boost_target_temp` / `boost_minutes` | Χρησιμοποιείται ο στόχος/χρόνος **ήπιου** καιρού. |
+| `hysteresis` | `3 °C` — μετά τον στόχο, επανάναψη όταν πέσει 3° κάτω (αποφυγή short cycling). |
 
 > ⚠️ **Προσοχή:** αν αφήσεις κενό `boiler_switch` ή `water_temp_sensor`, ο
 > αυτοματισμός **δεν κάνει τίποτα** (σωστά — δεν θερμαίνει «στα τυφλά»).

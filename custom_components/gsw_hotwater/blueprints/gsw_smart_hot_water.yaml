@@ -408,6 +408,23 @@ blueprint:
         entity:
           domain: input_datetime
 
+    hysteresis:
+      name: Reheat hysteresis °C (Υστέρηση επανάναψης °C)
+      description: >
+        [EN] After the target is reached, heating restarts only when the water
+        drops this many degrees below the target. Prevents short cycling
+        (the boiler flipping on/off every 5 minutes). 0 = restart on any drop.
+        [EL] Αφού φτάσει ο στόχος, η θέρμανση ξαναρχίζει μόνο όταν το νερό πέσει
+        τόσους βαθμούς κάτω από τον στόχο. Αποτρέπει το συχνό άναμμα/σβήσιμο
+        (short cycling). 0 = επανάναψη με την παραμικρή πτώση.
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 15
+          step: 1
+          unit_of_measurement: "°C"
+
 mode: single
 max_exceeded: silent
 
@@ -469,6 +486,7 @@ variables:
   status_entity: !input status_entity
   progress_entity: !input progress_entity
   last_on_entity: !input last_on_entity
+  hysteresis_val: !input hysteresis
 
 trigger:
   - platform: time_pattern
@@ -724,7 +742,7 @@ action:
                         - condition: template
                           value_template: "{{ not solar_skip }}"
                         - condition: template
-                          value_template: "{{ (states(water_temp_sensor_entity) | float(0)) < (target_temp | float(0)) }}"
+                          value_template: "{{ (states(water_temp_sensor_entity) | float(0)) < ((target_temp | float(0)) - (hysteresis_val | float(0))) }}"
                         - condition: template
                           value_template: "{{ not is_state(boiler_switch_entity, 'on') }}"
 

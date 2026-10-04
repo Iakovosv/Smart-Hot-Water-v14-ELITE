@@ -124,6 +124,8 @@ DEFROST = """{% set now_t = now().time() %}
 
 PROGRESS = "{{ ([[ (hb_current / hb_target * 100) | round(0), 100 ] | min, 0] | max if hb_target > 0 else 0) | int }}"
 
+REHEAT = "{{ water_now < (target_temp - hysteresis_val) }}"
+
 
 def render(env: Environment, template: str, **ctx):
     return env.from_string(template).render(**ctx).strip()
@@ -270,6 +272,18 @@ def test_progress() -> None:
     check(render(env, PROGRESS, hb_current=0, hb_target=0) == "0", "zero target -> 0%")
 
 
+def test_reheat() -> None:
+    print("test_reheat (hysteresis prevents short cycling)")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0))
+    # target 58, hysteresis 3 -> reheat only below 55
+    check(render(env, REHEAT, water_now=57, target_temp=58, hysteresis_val=3) == "False",
+          "57 vs 58-3=55 -> no reheat")
+    check(render(env, REHEAT, water_now=54, target_temp=58, hysteresis_val=3) == "True",
+          "54 vs 55 -> reheat")
+    check(render(env, REHEAT, water_now=57.9, target_temp=58, hysteresis_val=0) == "True",
+          "hysteresis 0 -> reheat on any drop")
+
+
 def main() -> int:
     test_presence()
     test_solar()
@@ -277,6 +291,7 @@ def main() -> int:
     test_target()
     test_defrost()
     test_progress()
+    test_reheat()
     print()
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")
