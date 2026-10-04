@@ -124,6 +124,8 @@ def test_inputs(bp: dict) -> None:
             for suffix in ("enabled", "time", "temp"):
                 check(f"schedule_{i}_{suffix}" in inputs,
                       f"schedule_{i}_{suffix} input exists")
+        check("notify_target" in inputs, "optional notify_target input exists")
+        check("last_reason" in inputs, "optional last_reason input exists")
 
 
 def test_jinja(bp: dict) -> None:

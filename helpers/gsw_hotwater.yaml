@@ -76,3 +76,9 @@ input_datetime:
     has_date: true
     has_time: true
     icon: mdi:calendar-clock
+
+input_text:
+  gsw_last_reason:
+    name: "GSW: Last action reason (Λόγος τελευταίας ενέργειας)"
+    icon: mdi:text-box-outline
+    max: 64

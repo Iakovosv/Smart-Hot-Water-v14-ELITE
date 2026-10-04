@@ -127,6 +127,8 @@ PROGRESS = "{{ ([[ (hb_current / hb_target * 100) | round(0), 100 ] | min, 0] | 
 
 REHEAT = "{{ water_now < (target_temp - hysteresis_val) }}"
 
+REASON_TEXT = "sched {{ idx }}: {{ reason }}"
+
 # Full gate chain, in the same order as the blueprint's schedule decision.
 DECIDE = """{% if not master_on %}master_off
 {% elif not presence_ok %}no_presence
@@ -347,6 +349,17 @@ def test_scenarios() -> None:
         check(got == expected, f"{label} (got {got})")
 
 
+def test_reason() -> None:
+    print("test_reason (reason string recorded in input_text)")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 16, 3))
+    check(render(env, REASON_TEXT, idx=2, reason="target_ok") == "sched 2: target_ok",
+          "reason composed for schedule 2")
+    check(render(env, REASON_TEXT, idx=6, reason="heating") == "sched 6: heating",
+          "reason composed for schedule 6")
+    check(render(env, REASON_TEXT, idx=1, reason="solar_skip") == "sched 1: solar_skip",
+          "reason composed for schedule 1")
+
+
 def main() -> int:
     test_presence()
     test_solar()
@@ -356,6 +369,7 @@ def main() -> int:
     test_progress()
     test_reheat()
     test_scenarios()
+    test_reason()
     print()
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")

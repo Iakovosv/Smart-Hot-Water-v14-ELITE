@@ -19,6 +19,8 @@ blueprint:
       (choose off / flag / temperature / both).
     • Manual boost: heat immediately from a button, with its own target and time.
     • Live status + progress helpers (input_select / input_number / input_datetime).
+    • Optional notification to a chosen device when heating/boost/defrost ends,
+      and an optional input_text that records why the last action happened.
     • All entities are selected from the UI - no code required.
     • Bilingual labels (Greek / English).
 
@@ -41,6 +43,8 @@ blueprint:
       συλλέκτη (επιλογή: off / flag / temperature / both).
     • Χειροκίνητο boost: άμεσο άναμμα από κουμπί, με δικό του στόχο και χρόνο.
     • Ζωντανή κατάσταση + πρόοδος (input_select / input_number / input_datetime).
+    • Προαιρετική ειδοποίηση σε επιλεγμένη συσκευή όταν ολοκληρωθεί θέρμανση/
+      boost/defrost, και προαιρετικό input_text που καταγράφει τον λόγο.
     • Όλες οι οντότητες επιλέγονται από το UI - χωρίς κώδικα.
     • Δίγλωσσες ετικέτες (Ελληνικά / Αγγλικά).
 
@@ -492,6 +496,35 @@ blueprint:
           step: 1
           unit_of_measurement: "°C"
 
+    # ------------------------------------------------------------------ #
+    # Optional notification + reason (both optional)
+    # ------------------------------------------------------------------ #
+    notify_target:
+      name: Notify device on completion (Συσκευή ειδοποίησης)
+      description: >
+        [EN] Optional. Pick a notify device (mobile app). You get a message
+        when a scheduled heating or a boost finishes. Leave empty to disable.
+        [EL] Προαιρετικό. Διάλεξε συσκευή ειδοποίησης (mobile app). Θα λάβεις
+        μήνυμα όταν ολοκληρωθεί προγραμματισμένη θέρμανση ή boost. Κενό για
+        απενεργοποίηση.
+      default: ""
+      selector:
+        entity:
+          domain: notify
+
+    last_reason:
+      name: Last action reason (input_text λόγου - προαιρετικό)
+      description: >
+        [EN] Optional input_text helper. Stores why the last schedule action
+        happened (e.g. "sched 2: target_ok", "sched 1: heating"). Leave empty
+        to disable. [EL] Προαιρετικό input_text. Αποθηκεύει γιατί έγινε η
+        τελευταία ενέργεια προγράμματος (π.χ. "sched 2: target_ok"). Κενό για
+        απενεργοποίηση.
+      default: ""
+      selector:
+        entity:
+          domain: input_text
+
 mode: single
 max_exceeded: silent
 
@@ -563,6 +596,8 @@ variables:
   progress_entity: !input progress_entity
   last_on_entity: !input last_on_entity
   hysteresis_val: !input hysteresis
+  notify_target_entity: !input notify_target
+  last_reason_entity: !input last_reason
 
 trigger:
   - platform: time
@@ -682,6 +717,16 @@ action:
                     data:
                       option: >-
                         {{ 'Target reached' if (states(water_temp_sensor_entity) | float(0)) >= boost_target else 'Idle' }}
+              - if:
+                  - condition: template
+                    value_template: "{{ notify_target_entity not in ['', none] }}"
+                then:
+                  - service: "{{ notify_target_entity }}"
+                    data:
+                      title: "GSW Smart Hot Water"
+                      message: >-
+                        ✅ Boost ολοκληρώθηκε (στόχος {{ boost_target }}°C, νερό
+                        {{ states(water_temp_sensor_entity) }}°C)
             else:
               - stop: "Master switch is off"
 
@@ -763,6 +808,25 @@ action:
                                   entity_id: !input status_entity
                                 data:
                                   option: "Idle"
+                          - if:
+                              - condition: template
+                                value_template: "{{ last_reason_entity not in ['', none] }}"
+                            then:
+                              - service: input_text.set_value
+                                target:
+                                  entity_id: !input last_reason
+                                data:
+                                  value: "defrost"
+                          - if:
+                              - condition: template
+                                value_template: "{{ notify_target_entity not in ['', none] }}"
+                            then:
+                              - service: "{{ notify_target_entity }}"
+                                data:
+                                  title: "GSW Smart Hot Water"
+                                  message: >-
+                                    ✅ Defrost ολοκληρώθηκε. Νερό:
+                                    {{ states(water_temp_sensor_entity) }}°C
 
                   # ---------------------------------------------------- #
                   # SCHEDULES
@@ -817,6 +881,27 @@ action:
                               {% else %}
                                 {{ false }}
                               {% endif %}
+                            sch_reason: >-
+                              {%- if not master_on -%}master_off
+                              {%- elif not presence_ok -%}no_presence
+                              {%- elif states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] -%}sensor_bad
+                              {%- elif is_state(water_temp_check_entity, 'on') -%}blocked_check
+                              {%- elif solar_skip -%}solar_skip
+                              {%- elif (states(water_temp_sensor_entity) | float(0)) >= ((target_temp | float(0)) - (hysteresis_val | float(0))) -%}target_ok
+                              {%- elif is_state(boiler_switch_entity, 'on') -%}already_on
+                              {%- else -%}heating
+                              {%- endif -%}
+
+                        # --- Record why this schedule ran (optional) ---
+                        - if:
+                            - condition: template
+                              value_template: "{{ last_reason_entity not in ['', none] }}"
+                          then:
+                            - service: input_text.set_value
+                              target:
+                                entity_id: !input last_reason
+                              data:
+                                value: "sched {{ repeat.index }}: {{ sch_reason }}"
 
                         # --- Gate conditions ---
                         - condition: template
@@ -894,3 +979,14 @@ action:
                               data:
                                 option: >-
                                   {{ 'Target reached' if (states(water_temp_sensor_entity) | float(0)) >= (target_temp | float(0)) else 'Idle' }}
+                        - if:
+                            - condition: template
+                              value_template: "{{ notify_target_entity not in ['', none] }}"
+                          then:
+                            - service: "{{ notify_target_entity }}"
+                              data:
+                                title: "GSW Smart Hot Water"
+                                message: >-
+                                  ✅ Πρόγραμμα {{ repeat.index }} ολοκληρώθηκε
+                                  (στόχος {{ target_temp }}°C, νερό
+                                  {{ states(water_temp_sensor_entity) }}°C)

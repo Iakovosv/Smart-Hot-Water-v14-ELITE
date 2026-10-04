@@ -153,7 +153,8 @@ selected from the UI** — no code required.
 | `status_entity` | Helper κατάστασης | `input_select.gsw_hotwater_status` |
 | `progress_entity` | Helper προόδου | `input_number.gsw_hotwater_progress` |
 | `last_on_entity` | Helper τελευταίας ενεργοποίησης | `input_datetime.water_heater_on` |
-| `notify_service` | Υπηρεσία ειδοποίησης (προαιρετική) | κενό |
+| `notify_target` | Συσκευή ειδοποίησης (προαιρετική, `notify.*`) | κενό |
+| `last_reason` | Helper λόγου (`input_text`, προαιρετικό) | κενό |
 | `hysteresis` | Υστέρηση επανάναψης (αποφυγή short cycling) | `3 °C` |
 
 ### Κενά / προαιρετικά πεδία — ο αυτοματισμός δουλεύει πάντα
@@ -169,6 +170,8 @@ selected from the UI** — no code required.
 | `solar_temp_sensor` (με mode `temperature`) | Δεν παραλείπεται θέρμανση → θερμαίνει κανονικά. |
 | `status_entity` / `progress_entity` / `last_on_entity` | Απλώς δεν ενημερώνεται ο αντίστοιχος helper. |
 | `boost_target_temp` / `boost_minutes` | Χρησιμοποιείται ο στόχος/χρόνος **ήπιου** καιρού. |
+| `notify_target` | Δεν στέλνεται καμία ειδοποίηση (όλα δουλεύουν κανονικά). |
+| `last_reason` | Δεν καταγράφεται ο λόγος της τελευταίας ενέργειας. |
 | `hysteresis` | `3 °C` — μετά τον στόχο, επανάναψη όταν πέσει 3° κάτω (αποφυγή short cycling). |
 
 > ⚠️ **Προσοχή:** αν αφήσεις κενό `boiler_switch` ή `water_temp_sensor`, ο
@@ -193,6 +196,21 @@ selected from the UI** — no code required.
   την εξωτερική θερμοκρασία).
 - Αν **δεν** ενεργοποιήσεις κανένα πρόγραμμα, ο θερμοσίφωνας ανάβει **μόνο**
   με το κουμπί Boost.
+
+### Ειδοποιήσεις & λόγος ενέργειας (προαιρετικά)
+
+- **`notify_target`** — διάλεξε από το UI συσκευή (π.χ. `notify.iphone_iakovos`).
+  Θα λάβεις μήνυμα όταν **ολοκληρωθεί** προγραμματισμένη θέρμανση, **Boost** ή
+  **Defrost**. Αν το αφήσεις **κενό**, δεν στέλνεται τίποτα.
+- **`last_reason`** — διάλεξε ένα `input_text` helper (π.χ.
+  `input_text.gsw_last_reason`, υπάρχει στο `helpers/gsw_hotwater.yaml`).
+  Καταγράφει **γιατί** έγινε η τελευταία ενέργεια, π.χ.:
+  - `sched 2: heating` — θέρμανε το πρόγραμμα 2
+  - `sched 1: target_ok` — το νερό ήταν ήδη ζεστό (δεν χρειάστηκε)
+  - `sched 3: solar_skip` — παράλειψη λόγω ηλιακού
+  - `sched 4: no_presence` — δεν ήταν κάποιος στο σπίτι
+  - `sched 5: sensor_bad` / `blocked_check` / `already_on` / `master_off`
+  - `defrost` — έγινε defrost
 
 ### Καταστάσεις / Status values
 
