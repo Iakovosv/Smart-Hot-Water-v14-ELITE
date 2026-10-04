@@ -68,12 +68,14 @@ PRESENCE = """{% if not require_presence_val %}
   {{ true }}
 {% else %}
   {% set ns = namespace(here=false) %}
-  {% for z in user_1_zones_list %}
-    {% if states(user_1_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
-      {% set ns.here = true %}
-    {% endif %}
-  {% endfor %}
-  {% if user_2_entity not in ['', none] %}
+  {% if user_1_zones_list | length > 0 %}
+    {% for z in user_1_zones_list %}
+      {% if states(user_1_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
+        {% set ns.here = true %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+  {% if user_2_entity not in ['', none] and user_2_zones_list | length > 0 %}
     {% for z in user_2_zones_list %}
       {% if states(user_2_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
         {% set ns.here = true %}
@@ -111,8 +113,14 @@ TARGET = """{% if sched_temp | float(0) > 0 %}
 DEFROST = """{% set now_t = now().time() %}
 {% set start = today_at(defrost_start).time() %}
 {% set end = today_at(defrost_end).time() %}
+{% set o = o if outdoor_temp_sensor_entity not in ['', none] else -999 %}
 {% set in_window = (start <= now_t <= end) if start <= end else (now_t >= start or now_t <= end) %}
-{{ in_window and w <= defrost_water and o <= defrost_outdoor }}"""
+{{ in_window
+   and w <= defrost_water
+   and (outdoor_temp_sensor_entity in ['', none] or o <= defrost_outdoor)
+   and not is_state(water_temp_check_entity, 'on')
+   and water_temp_state not in ['unknown','unavailable','none','']
+   and not boiler_on }}"""
 
 PROGRESS = "{{ ([[ (hb_current / hb_target * 100) | round(0), 100 ] | min, 0] | max if hb_target > 0 else 0) | int }}"
 
@@ -167,6 +175,10 @@ def test_presence() -> None:
     r = render(env, PRESENCE, user_1_entity="person.iakovos", user_1_zones_list=zones,
                user_2_entity="", user_2_zones_list=[], require_presence_val=False)
     check(r == "True", "require_presence off -> always true")
+    # empty zones list -> nobody can match -> false (heating stays off)
+    r = render(env, PRESENCE, user_1_entity="person.iakovos", user_1_zones_list=[],
+               user_2_entity="", user_2_zones_list=[], require_presence_val=True)
+    check(r == "False", "empty zones + presence on -> false (safe)")
 
 
 def test_solar() -> None:
@@ -190,6 +202,14 @@ def test_solar() -> None:
         env = _make_env(states_map, attrs, datetime(2026, 1, 1, 6, 0))
         r = render(env, SOLAR, solar_mode_val=mode, **base)
         check(r == str(expected), f"solar mode={mode} states={states_map} -> {expected}")
+
+    # Empty optional entities -> never skip (heating still works)
+    empty = dict(solar_flag_entity="", solar_temp_sensor_entity="",
+                 solar_temp_threshold_val=45)
+    for mode in ("flag", "temperature", "both"):
+        env = _make_env({}, attrs, datetime(2026, 1, 1, 6, 0))
+        r = render(env, SOLAR, solar_mode_val=mode, **empty)
+        check(r == "False", f"solar mode={mode} with empty entities -> no skip")
 
 
 def test_window() -> None:
@@ -216,20 +236,30 @@ def test_target() -> None:
 
 
 def test_defrost() -> None:
-    print("test_defrost (time window, including past-midnight)")
-    ctx = dict(defrost_start="03:00:00", defrost_end="05:00:00", defrost_water=4,
-               defrost_outdoor=2, w=3, o=1)
+    print("test_defrost (time window, past-midnight, empty outdoor sensor)")
+    base = dict(defrost_start="03:00:00", defrost_end="05:00:00", defrost_water=4,
+                defrost_outdoor=2, w=3, o=1,
+                outdoor_temp_sensor_entity="sensor.outdoor",
+                water_temp_check_entity="", water_temp_state="3.0", boiler_on=False)
     env = _make_env({}, {}, datetime(2026, 1, 1, 4, 0))
-    check(render(env, DEFROST, **ctx) == "True", "inside window + cold -> true")
+    check(render(env, DEFROST, **base) == "True", "inside window + cold -> true")
     env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0))
-    check(render(env, DEFROST, **ctx) == "False", "outside window -> false")
+    check(render(env, DEFROST, **base) == "False", "outside window -> false")
     # past-midnight window 23:00 -> 02:00
-    ctx2 = dict(defrost_start="23:00:00", defrost_end="02:00:00", defrost_water=4,
-                defrost_outdoor=2, w=3, o=1)
+    pm = dict(base, defrost_start="23:00:00", defrost_end="02:00:00")
     env = _make_env({}, {}, datetime(2026, 1, 1, 0, 30))
-    check(render(env, DEFROST, **ctx2) == "True", "past-midnight window 00:30 -> true")
+    check(render(env, DEFROST, **pm) == "True", "past-midnight window 00:30 -> true")
     env = _make_env({}, {}, datetime(2026, 1, 1, 12, 0))
-    check(render(env, DEFROST, **ctx2) == "False", "past-midnight window 12:00 -> false")
+    check(render(env, DEFROST, **pm) == "False", "past-midnight window 12:00 -> false")
+    # no outdoor sensor -> outdoor gate ignored, defrost still works
+    no_out = dict(base, outdoor_temp_sensor_entity="")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 4, 0))
+    check(render(env, DEFROST, **no_out) == "True",
+          "empty outdoor sensor -> gate ignored -> true")
+    # water sensor unknown -> no defrost (never heat blind)
+    bad = dict(base, water_temp_state="unknown")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 4, 0))
+    check(render(env, DEFROST, **bad) == "False", "unknown water sensor -> false")
 
 
 def test_progress() -> None:

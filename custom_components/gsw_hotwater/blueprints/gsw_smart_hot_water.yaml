@@ -497,6 +497,7 @@ action:
               - variables:
                   boost_target: "{{ states(boost_target_entity) | float(warm_temp) }}"
                   boost_max: "{{ states(boost_minutes_entity) | float(max_warm_time) }}"
+                  boost_start: "{{ now().timestamp() }}"
               - if:
                   - condition: template
                     value_template: "{{ is_state(boiler_switch_entity, 'on') }}"
@@ -534,7 +535,7 @@ action:
                     data:
                       option: "Boost"
               - variables:
-                  heat_start: "{{ now().timestamp() }}"
+                  boost_start: "{{ now().timestamp() }}"
               - repeat:
                   sequence:
                     - if:
@@ -553,7 +554,7 @@ action:
                     - condition: template
                       value_template: >-
                         {{ (states(water_temp_sensor_entity) | float(0)) >= boost_target
-                           or (now().timestamp() - heat_start) / 60 >= boost_max
+                           or (now().timestamp() - boost_start) / 60 >= boost_max
                            or is_state(water_temp_check_entity, 'on')
                            or states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}
               - service: switch.turn_off
@@ -613,11 +614,11 @@ action:
                                 {% set start = today_at(defrost_start).time() %}
                                 {% set end = today_at(defrost_end).time() %}
                                 {% set w = states(water_temp_sensor_entity) | float(0) %}
-                                {% set o = states(outdoor_temp_sensor_entity) | float(0) %}
+                                {% set o = states(outdoor_temp_sensor_entity) | float(0) if outdoor_temp_sensor_entity not in ['', none] else -999 %}
                                 {% set in_window = (start <= now_t <= end) if start <= end else (now_t >= start or now_t <= end) %}
                                 {{ in_window
                                    and w <= defrost_water
-                                   and o <= defrost_outdoor
+                                   and (outdoor_temp_sensor_entity in ['', none] or o <= defrost_outdoor)
                                    and not is_state(water_temp_check_entity, 'on')
                                    and states(water_temp_sensor_entity) not in ['unknown','unavailable','none','']
                                    and not is_state(boiler_switch_entity, 'on') }}
@@ -674,12 +675,14 @@ action:
                                 {{ true }}
                               {% else %}
                                 {% set ns = namespace(here=false) %}
-                                {% for z in user_1_zones_list %}
-                                  {% if states(user_1_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
-                                    {% set ns.here = true %}
-                                  {% endif %}
-                                {% endfor %}
-                                {% if user_2_entity not in ['', none] %}
+                                {% if user_1_zones_list | length > 0 %}
+                                  {% for z in user_1_zones_list %}
+                                    {% if states(user_1_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
+                                      {% set ns.here = true %}
+                                    {% endif %}
+                                  {% endfor %}
+                                {% endif %}
+                                {% if user_2_entity not in ['', none] and user_2_zones_list | length > 0 %}
                                   {% for z in user_2_zones_list %}
                                     {% if states(user_2_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
                                       {% set ns.here = true %}
