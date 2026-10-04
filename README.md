@@ -375,7 +375,10 @@ custom_components/gsw_hotwater/
   blueprints/
     gsw_smart_hot_water.yaml   # the main automation blueprint
     gsw_boiler_safety.yaml     # independent safety watchdog blueprint
+  brand/                 # icon.png / logo.png (+ dark, + @2x)
   translations/
+brand/                   # same assets at repo root (for HACS / README)
+tools/make_icon.py       # regenerates all brand assets (Pillow)
 blueprints/automation/gsw_hotwater/   # installed location (created at runtime)
 helpers/gsw_hotwater.yaml             # optional helper entities (package)
 tests/
