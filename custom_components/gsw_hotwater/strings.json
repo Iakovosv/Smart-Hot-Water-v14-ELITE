@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "GSW Smart Hot Water",
+        "description": "Πατώντας Υποβολή, εγκαθίστανται/ενημερώνονται αυτόματα τα blueprints:\n• 🔥 GSW: Smart Hot Water ELITE (κύριος αυτοματισμός)\n• 🛡️ GSW: Boiler Safety Watchdog (ασφάλεια)\n\nΜετά πήγαινε Settings → Automations & Scenes → Blueprints και δημιούργησε automation από το καθένα."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Το GSW Smart Hot Water έχει ήδη ρυθμιστεί."
+    }
+  }
+}

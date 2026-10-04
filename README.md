@@ -79,12 +79,18 @@ selected from the UI** — no code required.
 2. Βάλε το URL: `https://github.com/Iakovosv/Smart-Hot-Water-v14-ELITE`
    και **Category: Integration** → **Add**.
 3. Αναζήτησε **GSW Smart Hot Water** → **Download**.
-4. **Restart** το Home Assistant. Το blueprint εγκαθίσταται μόνο του στο
-   `config/blueprints/automation/gsw_hotwater/`.
-5. **Settings → Automations & Scenes → Blueprints** → άνοιξε το
+4. **Restart** το Home Assistant (υποχρεωτικό για νέο integration).
+5. **Settings → Devices & Services → Add Integration** → αναζήτησε
+   **GSW Smart Hot Water** → **Submit**. Αυτό εγκαθιστά/ενημερώνει αυτόματα
+   **και τα δύο** blueprints.
+6. **Settings → Automations & Scenes → Blueprints** → άνοιξε το
    **🔥 GSW: Smart Hot Water ELITE** → **Create automation**.
-6. Κάνε το ίδιο και για το **🛡️ GSW: Boiler Safety Watchdog** → **Create automation**
+7. Κάνε το ίδιο και για το **🛡️ GSW: Boiler Safety Watchdog** → **Create automation**
    (και άφησέ το **πάντα ενεργό** — δες την ενότητα Ασφάλεια).
+
+> ℹ️ **Restart vs Quick Reload:** το **Quick Reload** (Developer Tools → YAML →
+> Reload) **δεν** φορτώνει νέα integrations — χρειάζεται **Restart**. Αν ενημερώσεις
+> μόνο τα blueprints (χωρίς αλλαγή integration), αρκεί Reload/restart των automations.
 
 > Γιατί HACS Integration και όχι απευθείας blueprint; Το HACS **δεν** έχει
 > κατηγορία «blueprint». Αυτό το μικρό integration απλώς αντιγράφει το blueprint
@@ -220,6 +226,9 @@ custom_components/gsw_hotwater/
   __init__.py            # installs the blueprint on startup
   installer.py           # pure-python blueprint installer (tested)
   const.py
+  config_flow.py         # UI setup (required so HA loads the integration)
+  strings.json           # UI text (English)
+  translations/          # el.json, en.json
   manifest.json
   version.json
   blueprints/

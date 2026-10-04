@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "GSW Smart Hot Water",
+        "description": "Submitting installs/updates the bundled blueprints:\n• 🔥 GSW: Smart Hot Water ELITE (main automation)\n• 🛡️ GSW: Boiler Safety Watchdog (safety)\n\nThen go to Settings → Automations & Scenes → Blueprints and create an automation from each one."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "GSW Smart Hot Water is already configured."
+    }
+  }
+}

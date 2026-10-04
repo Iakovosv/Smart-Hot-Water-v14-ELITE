@@ -159,6 +159,21 @@ def test_manifest() -> None:
     hacs = json.loads((ROOT / "hacs.json").read_text(encoding="utf-8"))
     check(bool(hacs.get("name")), "hacs.json has a name")
 
+    # HACS integration requirements
+    for key in ("domain", "documentation", "issue_tracker", "codeowners", "name", "version"):
+        check(key in manifest, f"manifest has '{key}' (HACS requirement)")
+    check((ROOT / "brand" / "icon.png").exists(), "brand/icon.png exists (HACS requirement)")
+    check((ROOT / "brand" / "icon@2x.png").exists(), "brand/icon@2x.png exists")
+
+    # Config flow so HA actually loads the integration
+    check(manifest.get("config_flow") is True, "manifest enables config_flow")
+    check((PKG / "config_flow.py").exists(), "config_flow.py exists")
+    check((PKG / "strings.json").exists(), "strings.json exists")
+    for lang in ("en", "el"):
+        tf = PKG / "translations" / f"{lang}.json"
+        check(tf.exists(), f"translations/{lang}.json exists")
+        json.loads(tf.read_text(encoding="utf-8"))  # must be valid JSON
+
 
 def test_action_shape(bp: dict) -> None:
     print("test_action_shape")
