@@ -392,6 +392,19 @@ def test_dashboard_files() -> None:
         for snippet, err in bad:
             print(f"        bad: {snippet!r} -> {err}")
 
+        # Every entity_id must be domain.object_id (catches typos like a
+        # missing dot). Templated entity_ids are skipped.
+        bad_ids = []
+        for node in walk_strings(data):
+            if node.startswith(("sensor.", "input_", "switch.", "binary_sensor.",
+                                "automation.", "light.", "climate.", "weather.",
+                                "camera.", "person.", "device_tracker.", "zone.",
+                                "number.", "select.", "time.", "todo.",
+                                "media_player.", "vacuum.", "button.", "event.")):
+                if "." not in node or " " in node or node.count(".") != 1:
+                    bad_ids.append(node)
+        check(not bad_ids, f"{rel}: entity_ids well-formed ({bad_ids[:3]})")
+
 
 def walk_strings(obj):
     if isinstance(obj, str):
@@ -466,6 +479,157 @@ def test_countdown_render() -> None:
               f"{path.name} shows for Heating/Boost/Defrost (OR)")
 
 
+def walk_markdown(obj, out):
+    """Collect every markdown card 'content' string in a dashboard YAML."""
+    if isinstance(obj, dict):
+        if obj.get("type") == "markdown" and isinstance(obj.get("content"), str):
+            out.append(obj["content"])
+        for v in obj.values():
+            walk_markdown(v, out)
+    elif isinstance(obj, list):
+        for v in obj:
+            walk_markdown(v, out)
+
+
+def test_ha_card_render() -> None:
+    """Render every card template with a REAL HomeAssistant engine.
+
+    Builds a real hass + state machine and runs the real Template engine
+    (real states(), now(), float(), as_timestamp()). This is the only check
+    that would have caught 'as_timestamp got invalid input 00:00:00' - the
+    YAML/Jinja parse tests pass happily on a template that crashes at
+    runtime. Skipped (ok) when HA is not installed.
+    """
+    print("test_ha_card_render (real HA template engine)")
+    try:
+        import asyncio  # noqa: PLC0415
+
+        from homeassistant.core import HomeAssistant  # noqa: PLC0415
+        from homeassistant.helpers.template import Template  # noqa: PLC0415
+    except ImportError:
+        print("  ok   - Home Assistant not installed, skipped")
+        return
+
+    states = {
+        "input_select.gsw_hotwater_status": "Heating",
+        "input_select.gsw_boiler_status": "Θέρμανση",
+        "input_number.gsw_hotwater_progress": "0",
+        "input_number.gsw_time_left_minutes": "30",
+        "input_number.gsw_time_left_pct": "50",
+        "input_datetime.water_heater_on": "00:00:00",  # the crash case
+        "input_text.gsw_last_reason": "Cold water, heating",
+        "sensor.temperature_esp_temperature_esp": "40.8120002746582",
+        "sensor.temperature_esp_outside_temperature": "29.375",
+        "sensor.gw2000a_outdoor_temperature": "19.8",
+        "sensor.water_heater_cloud_power": "0",
+        "sensor.uptime_4": "32",
+        "binary_sensor.rpi_power_status": "on",
+    }
+
+    async def run() -> list[str]:
+        hass = HomeAssistant("")
+        await hass.async_start()
+        for entity, state in states.items():
+            hass.states.async_set(entity, state)
+        await hass.async_block_till_done()
+        problems: list[str] = []
+        for path in sorted((ROOT / "dashboard").rglob("*.yaml")):
+            snippets: list[str] = []
+            walk_markdown(yaml.safe_load(path.read_text(encoding="utf-8")), snippets)
+            for i, snippet in enumerate(snippets):
+                try:
+                    result = Template(snippet, hass).async_render()
+                    if asyncio.iscoroutine(result):
+                        await result
+                except Exception as exc:  # noqa: BLE001
+                    problems.append(f"{path.relative_to(ROOT)} #{i}: {exc}")
+        await hass.async_stop()
+        return problems
+
+    problems = asyncio.run(run())
+    check(not problems, "all dashboard/card templates render on real HA")
+    for p in problems:
+        print(f"        {p}")
+
+    # Negative control: the OLD (buggy) template must fail on this engine,
+    # proving the check above is actually capable of catching the regression.
+    buggy = (
+        "{% set on = states('input_datetime.water_heater_on') %}"
+        "{% if on not in ['unknown', 'unavailable', ''] %}"
+        "{{ as_timestamp(on) }}{% endif %}"
+    )
+
+    async def run_bad() -> bool:
+        hass = HomeAssistant("")
+        await hass.async_start()
+        hass.states.async_set("input_datetime.water_heater_on", "00:00:00")
+        await hass.async_block_till_done()
+        try:
+            Template(buggy, hass).async_render()
+            return False
+        except Exception:  # noqa: BLE001
+            return True
+        finally:
+            await hass.async_stop()
+
+    check(asyncio.run(run_bad()),
+          "harness reproduces the old as_timestamp crash (negative control)")
+
+
+def walk_dicts(obj):
+    """Yield every dict node in a nested structure."""
+    if isinstance(obj, dict):
+        yield obj
+        for v in obj.values():
+            yield from walk_dicts(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from walk_dicts(v)
+
+
+def test_conditional_conditions() -> None:
+    """Validate conditional cards against the documented Lovelace schema.
+
+    https://www.home-assistant.io/dashboards/conditional - a state condition
+    uses `entity` (not the automation `entity_id`) and `state`/`state_not`,
+    where `state` may be a list (OR). This is the frontend schema, distinct
+    from the backend condition schema used by automations.
+    """
+    print("test_conditional_conditions (documented Lovelace schema)")
+    found = 0
+    for path in sorted((ROOT / "dashboard").rglob("*.yaml")):
+        rel = path.relative_to(ROOT)
+        for node in walk_dicts(yaml.safe_load(path.read_text(encoding="utf-8"))):
+            if node.get("type") != "conditional":
+                continue
+            found += 1
+            conds = node.get("conditions")
+            check(isinstance(conds, list) and conds, f"{rel}: conditions is a non-empty list")
+            check("card" in node, f"{rel}: conditional wraps a card")
+
+            def check_cond(c, depth=0):
+                check(isinstance(c, dict) and "condition" in c, f"{rel}: condition is a dict")
+                kind = c.get("condition")
+                if kind == "state":
+                    ent = c.get("entity")
+                    check(isinstance(ent, str) and "." in ent,
+                          f"{rel}: state condition has a valid entity ({ent})")
+                    check("state" in c or "state_not" in c,
+                          f"{rel}: state condition has state/state_not")
+                elif kind in ("and", "or", "not"):
+                    subs = c.get("conditions")
+                    check(isinstance(subs, list) and subs,
+                          f"{rel}: {kind} condition has a conditions list")
+                    for s in subs or []:
+                        check_cond(s, depth + 1)
+                elif kind == "numeric_state":
+                    check("entity" in c, f"{rel}: numeric_state has entity")
+
+            for c in conds or []:
+                check_cond(c)
+    check(found >= 3, f"conditional cards present ({found})")
+
+
 def main() -> int:
     for name in BLUEPRINTS:
         print(f"\n===== Validating {name} =====")
@@ -481,6 +645,8 @@ def main() -> int:
     test_ha_blueprint_save()
     test_dashboard_files()
     test_countdown_render()
+    test_ha_card_render()
+    test_conditional_conditions()
     print()
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")
