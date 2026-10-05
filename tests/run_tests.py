@@ -258,6 +258,83 @@ def test_no_forbidden_mentions() -> None:
     check(not offenders, f"no 'openhands' mentions (found: {offenders})")
 
 
+SAMPLE_INPUTS = {
+    "boiler_switch": "switch.boiler",
+    "water_temp_sensor": "sensor.water",
+    "max_water_temp": 75,
+    "status_entity": "input_select.status",
+    "progress_entity": "input_number.progress",
+    "last_reason": "input_text.reason",
+    "last_on_entity": "input_datetime.last_on",
+    "time_left_entity": "input_number.left",
+    "time_left_pct_entity": "input_number.left_pct",
+    "boiler_status_entity": "input_select.boiler",
+    "notify_target": "notify.mobile",
+    "outdoor_temp_sensor": "sensor.out",
+    "solar_flag": "binary_sensor.solar",
+    "solar_temp_sensor": "sensor.solar_t",
+    "user_1": "person.a",
+    "user_1_zones": ["zone.home"],
+    "user_2": "person.b",
+    "user_2_zones": ["zone.work"],
+}
+
+
+def test_ha_blueprint_save() -> None:
+    """Run HA's own save-time validation, if Home Assistant is installed.
+
+    This is the strongest check: it exercises the exact substitution +
+    voluptuous schema HA uses when the blueprint is saved from the UI, for
+    every optional field left empty, filled, and mixed. Skipped (ok) when HA
+    is not available, so the suite still runs standalone.
+    """
+    print("test_ha_blueprint_save (real HA substitution + schema)")
+    try:
+        import asyncio  # noqa: PLC0415
+
+        from homeassistant.components.automation import config as ac  # noqa: PLC0415
+        from homeassistant.components.blueprint import models  # noqa: PLC0415
+        from homeassistant.core import HomeAssistant  # noqa: PLC0415
+        from homeassistant.helpers import config_validation as cv  # noqa: PLC0415
+        from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
+        import voluptuous as vol  # noqa: PLC0415
+    except ImportError:
+        print("  ok   - Home Assistant not installed, skipped")
+        return
+
+    async def run() -> list[str]:
+        cv._hass.hass = HomeAssistant("")
+        problems: list[str] = []
+        for name in BLUEPRINTS:
+            path = str(BLUEPRINT_DIR / name)
+            bp = models.Blueprint(yloader.load_yaml(path), path=path,
+                                  schema=ac.AUTOMATION_BLUEPRINT_SCHEMA)
+            for mode in ("empty", "filled", "mixed"):
+                inputs = {}
+                for key, spec in bp.inputs.items():
+                    default = spec.get("default", "") if isinstance(spec, dict) else ""
+                    if mode == "empty":
+                        inputs[key] = default
+                    elif mode == "filled":
+                        inputs[key] = SAMPLE_INPUTS.get(key, default)
+                    else:
+                        inputs[key] = (SAMPLE_INPUTS.get(key, default)
+                                       if len(key) % 2 else default)
+                bi = models.BlueprintInputs(
+                    bp, {"use_blueprint": {"path": path, "input": inputs}})
+                try:
+                    ac.PLATFORM_SCHEMA(bi.async_substitute())
+                except vol.Invalid as exc:
+                    problems.append(f"{name} [{mode}]: {exc}")
+        return problems
+
+    problems = asyncio.run(run())
+    check(not problems, f"HA save validation passes for all scenarios "
+                        f"({len(BLUEPRINTS)} blueprints x 3 input modes)")
+    for p in problems:
+        print(f"        {p}")
+
+
 def main() -> int:
     for name in BLUEPRINTS:
         print(f"\n===== Validating {name} =====")
@@ -270,6 +347,7 @@ def main() -> int:
     test_installer()
     test_manifest()
     test_no_forbidden_mentions()
+    test_ha_blueprint_save()
     print()
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")
