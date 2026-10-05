@@ -39,7 +39,7 @@ card:
     <div style="width:{{ pct }}%;height:100%;border-radius:6px;background:var(--primary-color)"></div>
     </div>
     {% endif %}
-    **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') }} °C ·
-    **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') }} °C
-    **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') }} °C
+    **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') | float(0) | round(1) }} °C ·
+    **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') | float(0) | round(1) }} °C
+    **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') | float(0) | round(1) }} °C
 

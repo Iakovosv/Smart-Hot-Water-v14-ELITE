@@ -512,6 +512,88 @@ def walk_markdown(obj, out):
             walk_markdown(v, out)
 
 
+def test_helper_coverage() -> None:
+    """Every helper entity the cards reference must be defined in helpers/.
+
+    Catches 'Entity not found' on the dashboard: e.g. input_select.gsw_boost_mode
+    was shown by three cards but never declared, so it never existed.
+    """
+    print("test_helper_coverage")
+    helpers_path = ROOT / "helpers" / "gsw_hotwater.yaml"
+    helpers = yaml.safe_load(helpers_path.read_text(encoding="utf-8")) or {}
+    defined = {f"{dom}.{key}" for dom, items in helpers.items()
+               for key in (items or {})}
+
+    referenced: set[str] = set()
+    for path in sorted((ROOT / "dashboard").rglob("*.yaml")):
+        for node in walk_strings(yaml.safe_load(path.read_text(encoding="utf-8"))):
+            if isinstance(node, str) and node.startswith(
+                ("input_boolean.", "input_number.", "input_select.",
+                 "input_text.", "input_button.", "input_datetime.")
+            ) and node.count(".") == 1 and " " not in node:
+                referenced.add(node)
+
+    missing = sorted(referenced - defined)
+    check(not missing, f"all helper entities used by cards are defined ({missing})")
+
+
+def test_gauge_and_rounding() -> None:
+    """Gauge severity must read as a thermometer, and temps must be 1 decimal.
+
+    HA's gauge card sorts the severity keys by value, so the *largest* number
+    wins the top of the range. For a water temperature gauge that means
+    red > yellow > green (hot = red); the old config had green highest, which
+    painted 50 C green. Displays must also round to 1 decimal - raw sensor
+    states print 15 digits (e.g. 50.8120002746582).
+    """
+    print("test_gauge_and_rounding")
+    dash_dir = ROOT / "dashboard"
+    water = "sensor.temperature_esp_temperature_esp"
+    gauges = []
+
+    def walk(obj):
+        if isinstance(obj, dict):
+            if obj.get("type") == "gauge" and isinstance(obj.get("severity"), dict):
+                gauges.append(obj)
+            for v in obj.values():
+                walk(v)
+        elif isinstance(obj, list):
+            for v in obj:
+                walk(v)
+
+    for path in sorted(dash_dir.rglob("*.yaml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        walk(data)
+
+    check(bool(gauges), "dashboard has gauges with severity")
+    for g in gauges:
+        sev = g["severity"]
+        check(set(sev) == {"green", "yellow", "red"},
+              f"gauge severity has green/yellow/red ({sorted(sev)})")
+        check(sev["red"] > sev["yellow"] > sev["green"],
+              f"gauge {g.get('entity')}: red>yellow>green so hot=red "
+              f"({sev['green']}/{sev['yellow']}/{sev['red']})")
+    water_sev = [g["severity"] for g in gauges if g.get("entity") == water]
+    check(any(s["red"] == 50 for s in water_sev),
+          "water gauge turns red at 50 C")
+
+    # No unrounded temperature display anywhere (raw states have 15 digits).
+    bad = []
+    for path in sorted(dash_dir.rglob("*.yaml")):
+        for node in walk_strings(yaml.safe_load(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, str):
+                continue
+            for ent in (water, "sensor.temperature_esp_outside_temperature",
+                        "sensor.gw2000a_outdoor_temperature"):
+                needle = f"states('{ent}')"
+                for idx in range(len(node)):
+                    if node.startswith(needle, idx):
+                        tail = node[idx + len(needle):idx + len(needle) + 40]
+                        if "round(1)" not in tail:
+                            bad.append(f"{path.name}: {ent}")
+    check(not bad, f"all temperature displays rounded to 1 decimal ({bad[:3]})")
+
+
 def test_ha_card_render() -> None:
     """Render every card template with a REAL HomeAssistant engine.
 
@@ -665,6 +747,8 @@ def main() -> int:
     test_no_forbidden_mentions()
     test_ha_blueprint_save()
     test_dashboard_files()
+    test_helper_coverage()
+    test_gauge_and_rounding()
     test_countdown_render()
     test_ha_card_render()
     test_conditional_conditions()

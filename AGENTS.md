@@ -54,6 +54,11 @@ Sanity-check the harness by adding a bogus domain; it must report
   `as_timestamp("00:00:00")` raises `ValueError: not a valid date/time`.
   Never call `as_timestamp` on it; read the remaining-minutes helper instead.
 - HA's template `as_timestamp`/`as_datetime` raise unless a `default` is given.
+- HA gauge `severity` keys are **sorted by value**; the largest wins the top of
+  the range. For a "hot = red" thermometer use `green < yellow < red`
+  (e.g. water `0/35/50`). `green:45, yellow:30, red:0` paints hot water green.
+- Card displays must round: `states('sensor.x') | float(0) | round(1)`, or the
+  raw sensor prints 15 digits.
 - Lovelace **conditional cards** use `entity`/`state` (frontend schema), NOT the
   automation `entity_id`. `state` may be a list (OR). The backend
   `condition.async_validate_condition_config` is the *wrong* validator for them.

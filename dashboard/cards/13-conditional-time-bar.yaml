@@ -27,4 +27,4 @@ card:
     <div style="width:{{ elapsed }}%;height:100%;background:linear-gradient(90deg,var(--warning-color),var(--error-color))"></div>
     </div>
     **Πέρασε:** {{ elapsed }} % · **Απομένει:** {{ pct }} %
-    **Νερό:** {{ states('sensor.temperature_esp_temperature_esp') }} °C
+    **Νερό:** {{ states('sensor.temperature_esp_temperature_esp') | float(0) | round(1) }} °C

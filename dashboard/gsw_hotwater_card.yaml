@@ -24,11 +24,11 @@ cards:
            'Boost':          ['⚡', 'Boost']
          }.get(s, ['💧', s if s != 'unknown' else '—']) %}
       # {{ meta[0] }} {{ meta[1] }}
-      **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') }} °C
-      **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') }} °C
-      **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') }} °C
-      **Πρόοδος:** {{ states('input_number.gsw_hotwater_progress') }} % ·
-      **Υπόλοιπο:** {{ states('input_number.gsw_time_left_minutes') }} min
+      **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') | float(0) | round(1) }} °C
+      **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') | float(0) | round(1) }} °C
+      **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') | float(0) | round(1) }} °C
+      **Πρόοδος:** {{ states('input_number.gsw_hotwater_progress') | float(0) | round(0) }} % ·
+      **Υπόλοιπο:** {{ states('input_number.gsw_time_left_minutes') | float(0) | round(0) if states('input_number.gsw_time_left_minutes') not in ['unknown','unavailable',''] else '—' }} min
       {% if states('input_text.gsw_last_reason') not in ['unknown',''] %}
       **Λόγος:** {{ states('input_text.gsw_last_reason') }}
       {% endif %}
@@ -44,9 +44,9 @@ cards:
         max: 90
         needle: true
         severity:
-          green: 45
-          yellow: 30
-          red: 0
+          green: 0
+          yellow: 35
+          red: 50
       - type: gauge
         entity: sensor.temperature_esp_outside_temperature
         name: Συλλέκτης
@@ -110,7 +110,7 @@ cards:
         <span style="font-size:2.4em;font-weight:700">{{ '%02d' | format((secs // 60) | int) }}:{{ '%02d' | format((secs % 60) | int) }}</span>
         <div style="font-size:0.85em;opacity:0.7">υπόλοιπος χρόνος — μετρά αντίστροφα</div>
         </div>
-        **Νερό:** {{ states('sensor.temperature_esp_temperature_esp') }} °C
+        **Νερό:** {{ states('sensor.temperature_esp_temperature_esp') | float(0) | round(1) }} °C
 
   # ---------- Όλες οι λεπτομέρειες (expandable) ----------
   - type: entities

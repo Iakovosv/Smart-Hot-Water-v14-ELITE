@@ -1,7 +1,12 @@
 # --------------------------------------------------------------------------
 #  GSW Smart Hot Water — Κάρτα 02: Gauges θερμοκρασιών
-#  Δείχνει: νερό χρήσης (χρωματικό: πράσινο ≥45°, κίτρινο ≥30°, κόκκινο <30°),
-#  συλλέκτη ηλιακού και πρόοδο θέρμανσης.
+#  Δείχνει: νερό χρήσης, συλλέκτη ηλιακού και πρόοδο θέρμανσης.
+#
+#  ΧΡΩΜΑ ΝΕΡΟΥ (θερμόμετρο: ζεστό = κόκκινο):
+#     <35° πράσινο  ·  35-50° κίτρινο  ·  >50° κόκκινο
+#  (Στο gauge της HA τα green/yellow/red ταξινομούνται ΚΑΤΑ ΤΙΜΗ, οπότε
+#   το «red» πρέπει να είναι το ΜΕΓΑΛΥΤΕΡΟ νούμερο για να σημαίνει «ζεστό».)
+#  Αν προτιμάς «πράσινο = καλό/ζεστό», γύρνα το σε green:45, yellow:30, red:0.
 # --------------------------------------------------------------------------
 type: horizontal-stack
 cards:
@@ -13,16 +18,20 @@ cards:
     max: 90
     needle: true
     severity:
-      green: 45
-      yellow: 30
-      red: 0
+      green: 0
+      yellow: 35
+      red: 50
   - type: gauge
     entity: sensor.temperature_esp_outside_temperature
     name: Συλλέκτης
     unit: "°C"
     min: 0
-    max: 90
+    max: 120
     needle: true
+    severity:
+      green: 0
+      yellow: 40
+      red: 70
   - type: gauge
     entity: input_number.gsw_hotwater_progress
     name: Πρόοδος
@@ -30,3 +39,4 @@ cards:
     min: 0
     max: 100
     needle: true
+

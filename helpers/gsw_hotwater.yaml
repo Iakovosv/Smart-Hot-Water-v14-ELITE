@@ -96,6 +96,15 @@ input_select:
       - "Αναμονή"    # Idle
       - "Έτοιμο"     # Ready
 
+  gsw_boost_mode:
+    name: "GSW: Boost mode (Λειτουργία boost)"
+    icon: mdi:cog
+    # Πληροφοριακό: το blueprint αποφασίζει πάντα με θερμοκρασία/χρόνο.
+    options:
+      - "Auto"
+      - "Temperature"
+      - "Time"
+
 input_datetime:
   water_heater_on:
     name: "GSW: Water heater last on (Τελευταία ενεργοποίηση θερμοσίφωνα)"

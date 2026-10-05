@@ -35,11 +35,11 @@ views:
                    'Boost':          ['⚡', 'deep-orange']
                  }.get(s, ['💧', 'grey']) %}
               # {{ meta[0] }} {{ s if s != 'unknown' else '—' }}
-              **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') }} °C
-              **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') }} °C
-              **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') }} °C
-              **Πρόοδος:** {{ states('input_number.gsw_hotwater_progress') }} % ·
-              **Υπόλοιπο:** {{ states('input_number.gsw_time_left_minutes') }} min
+              **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') | float(0) | round(1) }} °C
+              **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') | float(0) | round(1) }} °C
+              **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') | float(0) | round(1) }} °C
+              **Πρόοδος:** {{ states('input_number.gsw_hotwater_progress') | float(0) | round(0) }} % ·
+              **Υπόλοιπο:** {{ states('input_number.gsw_time_left_minutes') | float(0) | round(0) if states('input_number.gsw_time_left_minutes') not in ['unknown','unavailable',''] else '—' }} min
         column_span: 2
 
       - type: grid
@@ -52,9 +52,9 @@ views:
             max: 90
             needle: true
             severity:
-              green: 45
-              yellow: 30
-              red: 0
+              green: 0
+              yellow: 35
+              red: 50
       - type: grid
         cards:
           - type: gauge
@@ -110,8 +110,8 @@ views:
                 <div style="width:{{ pct }}%;height:100%;border-radius:6px;background:var(--primary-color)"></div>
                 </div>
                 {% endif %}
-                **Νερό:** {{ states('sensor.temperature_esp_temperature_esp') }} °C ·
-                **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') }} °C
+                **Νερό:** {{ states('sensor.temperature_esp_temperature_esp') | float(0) | round(1) }} °C ·
+                **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') | float(0) | round(1) }} °C
         column_span: 2
 
       - type: grid
