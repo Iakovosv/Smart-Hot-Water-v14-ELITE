@@ -1,102 +1,48 @@
 # --------------------------------------------------------------------------
-#  GSW Smart Hot Water — Κάρτα 14: Πρόοδος + Κατάσταση + Boost (όμορφη)
+#  GSW Smart Hot Water — Κάρτα 14: Progress + Status + Boost
 #
-#  Σύγχρονη εκδοχή της κλασικής vertical-stack:
-#    • Επικεφαλίδα κατάστασης με εικονίδιο & χρώμα (από το input_select)
-#    • Gauge προόδου με «θερμόμετρο» χρώμα (κόκκινο όταν αργεί, πράσινο όταν
-#      πλησιάζει / ολοκληρώνεται)
-#    • Πλακίδια (tiles) για ρελέ, νερό και master
-#    • Boost με κουμπί + ρυθμίσεις
+#  ΙΔΙΑ δομή με την κλασική vertical-stack (gauge Progress / entities Status /
+#  entities Boost) — ίδιες οντότητες, ίδιοι τίτλοι, ίδια σειρά.
+#  Διακριτική ομορφιά:
+#    • gauge: + unit "%" + χρώμα (κόκκινο→κίτρινο→πράσινο), ΧΩΡΙΣ βελόνα
+#    • entities: + state_color (χρώμα όταν είναι on) + εικονίδια
 #
-#  Αντικαθιστά την παλιά:
-#    type: vertical-stack / gauge Progress / entities Status / entities Boost
-#  ΜΟΝΟ built-in κάρτες — χωρίς HACS.
+#  Μόνο built-in κάρτες — χωρίς HACS, χωρίς restart (copy-paste).
 # --------------------------------------------------------------------------
 type: vertical-stack
 cards:
-  # ---------- Επικεφαλίδα κατάστασης ----------
-  - type: markdown
-    content: |
-      {% set s = states('input_select.gsw_hotwater_status') %}
-      {% set meta = {
-           'Heating':        ['🔥', 'Θέρμανση'],
-           'Target reached': ['✅', 'Έτοιμο'],
-           'Idle':           ['⏸️', 'Αναμονή'],
-           'Blocked':        ['⛔', 'Μπλοκαρισμένο'],
-           'Solar skip':     ['☀️', 'Παράλειψη ηλιακού'],
-           'Defrost':        ['❄️', 'Defrost'],
-           'Boost':          ['⚡', 'Boost']
-         }.get(s, ['💧', s if s != 'unknown' else '—']) %}
-      {% set color = {
-           'Heating':        'var(--error-color)',
-           'Target reached': 'var(--success-color)',
-           'Idle':           'var(--secondary-text-color)',
-           'Blocked':        'var(--error-color)',
-           'Solar skip':     'var(--warning-color)',
-           'Defrost':        'var(--info-color)',
-           'Boost':          'var(--warning-color)'
-         }.get(s, 'var(--primary-text-color)') %}
-      {% set left = states('input_number.gsw_time_left_minutes') %}
-      {% set left_ok = left not in ['unknown', 'unavailable', ''] %}
-      <div style="display:flex;align-items:center;gap:14px;padding:4px 2px">
-      <div style="font-size:2.6em;line-height:1">{{ meta[0] }}</div>
-      <div style="flex:1">
-      <div style="font-size:1.35em;font-weight:700;color:{{ color }}">{{ meta[1] }}</div>
-      <div style="font-size:0.9em;opacity:0.75">Νερό {{ states('sensor.temperature_esp_temperature_esp') | float(0) | round(1) }} °C{% if left_ok %} · Υπόλοιπο {{ left | float(0) | round(0) }} min{% endif %}</div>
-      </div>
-      </div>
-
-  # ---------- Πρόοδος (χρωματικό gauge) ----------
-  #  Πράσινο όσο πλησιάζει στην ολοκλήρωση, κόκκινο μόλις ξεκίνησε.
   - type: gauge
     entity: input_number.gsw_hotwater_progress
-    name: 🔥 Πρόοδος θέρμανσης
+    name: 🔥 Progress
     unit: "%"
     min: 0
     max: 100
-    needle: true
     severity:
       red: 0
       yellow: 40
       green: 80
 
-  # ---------- Πλακίδια κατάστασης ----------
-  - type: grid
-    columns: 2
-    square: false
-    cards:
-      - type: tile
-        entity: switch.smart_power_outlet_1
-        name: Ρελέ
+  - type: entities
+    title: 🔥 Status
+    show_header_toggle: false
+    state_color: true
+    entities:
+      - entity: input_select.gsw_hotwater_status
+        icon: mdi:information-outline
+      - entity: switch.smart_power_outlet_1
         icon: mdi:power
-      - type: tile
-        entity: input_boolean.gsw_smart_hotwater_enable
-        name: Master
-        icon: mdi:water-boiler
-      - type: tile
-        entity: sensor.temperature_esp_temperature_esp
-        name: Νερό χρήσης
+      - entity: sensor.temperature_esp_temperature_esp
         icon: mdi:water-thermometer
-        color: deep-orange
-      - type: tile
-        entity: input_boolean.water_temperature_check
-        name: Μπλοκάρισμα
-        icon: mdi:water-off
 
-  # ---------- Boost ----------
   - type: entities
     title: ⚡ Boost
     show_header_toggle: false
     entities:
-      - entity: input_button.gsw_hotwater_boost
-        name: Άμεσο boost
-        icon: mdi:flash
       - entity: input_select.gsw_boost_mode
-        name: Λειτουργία
         icon: mdi:cog
       - entity: input_number.gsw_boost_minutes
-        name: Λεπτά
         icon: mdi:timer
       - entity: input_number.gsw_boost_target_temp
-        name: Στόχος
         icon: mdi:thermometer
+      - entity: input_button.gsw_hotwater_boost
+        icon: mdi:flash
