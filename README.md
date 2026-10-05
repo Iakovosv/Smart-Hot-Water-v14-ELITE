@@ -320,6 +320,38 @@ panel/συλλέκτη** — ώστε να **μην ανάβει** όταν ο �
 
 ---
 
+## 📊 Κάρτα / Dashboard
+
+Έτοιμα Lovelace αρχεία στο φάκελο [`dashboard/`](dashboard/):
+
+| Αρχείο | Τι είναι |
+|---|---|
+| [`gsw_hotwater_dashboard.yaml`](dashboard/gsw_hotwater_dashboard.yaml) | **Πλήρες dashboard** (2 views: *Κατάσταση* + *Ρυθμίσεις*) με gauges, χειριστήρια, boost, ιστορικό, κατανάλωση και αναφορά **όλων** των παραμέτρων. |
+| [`gsw_hotwater_card.yaml`](dashboard/gsw_hotwater_card.yaml) | **Μία compact κάρτα** (vertical-stack) για να την ρίξεις σε υπάρχον dashboard. |
+
+**Μόνο built-in κάρτες** — δεν χρειάζεται HACS frontend.
+
+### Εγκατάσταση
+1. Settings → **Dashboards** → **+ Add dashboard** → άνοιξέ το → **Edit** (μολύβι).
+2. Πάνω δεξιά **⋮** → **Raw configuration editor**.
+3. Επικόλλησε **όλο** το περιεχόμενο του `gsw_hotwater_dashboard.yaml` → **Save**.
+4. Για τη μικρή κάρτα: Edit → **+ Add card** → **Manual** → επικόλλησε το `gsw_hotwater_card.yaml`.
+
+### Τι περιλαμβάνει (όλες οι παράμετροι)
+- **Ζωντανή κατάσταση**: κατάσταση λέβητα, νερό χρήσης, συλλέκτης, εξωτερική, πρόοδος, υπόλοιπο χρόνου, λόγος.
+- **Χειριστήρια**: ρελέ θερμοσίφωνα, master enable, μπλοκάρισμα θέρμανσης, solar skip.
+- **Boost**: κουμπί, στόχος, λεπτά, λειτουργία.
+- **Βοηθητικές**: `input_select` κατάστασης (EN/EL), πρόοδος, χρόνος, τελευταία ενεργοποίηση, λόγος.
+- **Κατανάλωση/σύστημα**: ισχύς, cloud, τροφοδοσία Pi, uptime.
+- **Ιστορικό**: γράφημα 24 ωρών + στατιστικά κατανάλωσης.
+- **Αναφορά παραμέτρων**: `cold_threshold`, `target_temp_cold/warm`, `max_water_temp`, `solar_*`, `max_time_*`, defrost, `require_presence`, χρήστες/ζώνες, ειδοποιήσεις.
+
+> Τα entity ids είναι τα δικά σου. Αν κάποιο διαφέρει, άλλαξέ το στο YAML.
+> Τα `gsw_time_left_minutes`, `gsw_time_left_pct`, `gsw_last_reason` είναι
+> **προαιρετικά** — σβήσε τις γραμμές τους αν δεν τα έχεις.
+
+---
+
 ## Πώς λειτουργεί / How it works
 
 - **Ακριβής ώρα, όχι polling.** Τα **6 προγράμματα** και το **defrost**
@@ -388,6 +420,16 @@ off → **όχι «ήδη ζεστό»** → όχι αναμμένο → ανά�
 ---
 
 ## Ιστορικό εκδόσεων / Changelog
+### v1.11.0
+- **Νέο: έτοιμο dashboard + compact κάρτα** στο φάκελο `dashboard/`:
+  - `gsw_hotwater_dashboard.yaml` — 2 views (*Κατάσταση* / *Ρυθμίσεις*) με
+    gauges, χειριστήρια, boost, ιστορικό, κατανάλωση και αναφορά **όλων** των
+    παραμέτρων.
+  - `gsw_hotwater_card.yaml` — μία κάρτα (vertical-stack) για υπάρχον dashboard.
+  - **Μόνο built-in κάρτες** (χωρίς HACS frontend).
+- Το test suite ελέγχει αυτόματα ότι τα dashboard YAML είναι έγκυρα, ότι
+  χρησιμοποιούν μόνο built-in κάρτες και ότι όλα τα Jinja templates περνούν.
+
 ### v1.10.3
 - **Έλεγχος με τον πραγματικό validator του Home Assistant**: τα blueprints
   περνούν το ίδιο substitution + schema validation που τρέχει το HA στο save,

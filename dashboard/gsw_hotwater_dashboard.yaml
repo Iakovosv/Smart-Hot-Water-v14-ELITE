@@ -1,0 +1,292 @@
+# ==========================================================================
+#  GSW Smart Hot Water ELITE — Lovelace dashboard (YAML mode)
+#
+#  Πώς το βάζεις:
+#    Settings -> Dashboards -> + Add dashboard -> (άνοιξέ το) -> Edit (μολύβι)
+#    -> πάνω δεξιά ⋮ -> "Raw configuration editor" -> επικόλλησε ΟΛΟ το
+#    περιεχόμενο -> Save.
+#  Ή βάλε το σαν  <config>/ui-lovelace.yaml (YAML mode).
+#
+#  Χρησιμοποιεί ΜΟΝΟ built-in κάρτες (δεν χρειάζεται HACS frontend).
+#  Αντικατέστησε τα entity ids με τα δικά σου αν διαφέρουν.
+# ==========================================================================
+
+title: Smart Hot Water
+views:
+  # =====================================================================
+  - title: Κατάσταση
+    path: status
+    icon: mdi:water-boiler
+    type: sections
+    max_columns: 4
+    sections:
+      - type: grid
+        cards:
+          - type: markdown
+            content: |
+              {% set s = states('input_select.gsw_hotwater_status') %}
+              {% set meta = {
+                   'Heating':        ['🔥', 'orange'],
+                   'Target reached': ['✅', 'green'],
+                   'Idle':           ['⏸️', 'grey'],
+                   'Blocked':        ['⛔', 'red'],
+                   'Solar skip':     ['☀️', 'amber'],
+                   'Defrost':        ['❄️', 'blue'],
+                   'Boost':          ['⚡', 'deep-orange']
+                 }.get(s, ['💧', 'grey']) %}
+              # {{ meta[0] }} {{ s if s != 'unknown' else '—' }}
+              **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') }} °C
+              **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') }} °C
+              **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') }} °C
+              **Πρόοδος:** {{ states('input_number.gsw_hotwater_progress') }} % ·
+              **Υπόλοιπο:** {{ states('input_number.gsw_time_left_minutes') }} min
+        column_span: 2
+
+      - type: grid
+        cards:
+          - type: gauge
+            entity: sensor.temperature_esp_temperature_esp
+            name: Νερό χρήσης
+            unit: "°C"
+            min: 0
+            max: 90
+            needle: true
+            severity:
+              green: 45
+              yellow: 30
+              red: 0
+      - type: grid
+        cards:
+          - type: gauge
+            entity: sensor.temperature_esp_outside_temperature
+            name: Συλλέκτης ηλιακού
+            unit: "°C"
+            min: 0
+            max: 90
+            needle: true
+      - type: grid
+        cards:
+          - type: gauge
+            entity: input_number.gsw_hotwater_progress
+            name: Πρόοδος θέρμανσης
+            unit: "%"
+            min: 0
+            max: 100
+            needle: true
+      - type: grid
+        cards:
+          - type: gauge
+            entity: sensor.gw2000a_outdoor_temperature
+            name: Έξω
+            unit: "°C"
+            min: -5
+            max: 45
+
+      - type: grid
+        title: Χειριστήρια
+        cards:
+          - type: tile
+            entity: switch.smart_power_outlet_1
+            name: Θερμοσίφωνας (ρελέ)
+            icon: mdi:power
+          - type: tile
+            entity: input_boolean.gsw_smart_hotwater_enable
+            name: Έξυπνος έλεγχος (master)
+            icon: mdi:water-boiler
+          - type: tile
+            entity: input_boolean.water_temperature_check
+            name: Μπλοκάρισμα θέρμανσης
+            icon: mdi:water-off
+          - type: tile
+            entity: input_boolean.gsw_solar_skip
+            name: Παράλειψη λόγω ηλιακού
+            icon: mdi:weather-sunny
+
+      - type: grid
+        title: ⚡ Boost
+        cards:
+          - type: button
+            entity: input_button.gsw_hotwater_boost
+            name: Άμεσο boost
+            icon: mdi:flash
+            show_state: false
+          - type: tile
+            entity: input_number.gsw_boost_target_temp
+            name: Στόχος boost
+            icon: mdi:thermometer
+            features:
+              - type: numeric-input
+          - type: tile
+            entity: input_number.gsw_boost_minutes
+            name: Λεπτά boost
+            icon: mdi:timer
+            features:
+              - type: numeric-input
+          - type: tile
+            entity: input_select.gsw_boost_mode
+            name: Λειτουργία boost
+            icon: mdi:cog
+
+      - type: grid
+        title: Λεπτομέρειες
+        cards:
+          - type: entities
+            title: Βοηθητικές οντότητες
+            show_header_toggle: false
+            entities:
+              - entity: input_select.gsw_hotwater_status
+                name: Κατάσταση (EN)
+              - entity: input_select.gsw_boiler_status
+                name: Κατάσταση λέβητα (EL)
+              - entity: input_number.gsw_hotwater_progress
+                name: Πρόοδος %
+              - entity: input_number.gsw_time_left_minutes
+                name: Υπόλοιπο (min)
+              - entity: input_number.gsw_time_left_pct
+                name: Υπόλοιπο %
+              - entity: input_datetime.water_heater_on
+                name: Τελευταία ενεργοποίηση
+              - entity: input_text.gsw_last_reason
+                name: Λόγος τελευταίας ενέργειας
+          - type: entities
+            title: Κατανάλωση / σύνδεση
+            show_header_toggle: false
+            entities:
+              - entity: sensor.water_heater_cloud_power
+                name: Ισχύς θερμοσίφωνα
+              - entity: switch.water_heater_cloud
+                name: Cloud έλεγχος
+              - entity: binary_sensor.rpi_power_status
+                name: Τροφοδοσία Raspberry Pi
+              - entity: sensor.uptime_4
+                name: Uptime
+
+      - type: grid
+        title: Ιστορικό θερμοκρασιών
+        cards:
+          - type: history-graph
+            hours_to_show: 24
+            refresh_interval: 60
+            entities:
+              - entity: sensor.temperature_esp_temperature_esp
+                name: Νερό χρήσης
+              - entity: sensor.temperature_esp_outside_temperature
+                name: Συλλέκτης
+              - entity: sensor.gw2000a_outdoor_temperature
+                name: Έξω
+        column_span: 2
+      - type: grid
+        title: Κατανάλωση ρεύματος
+        cards:
+          - type: statistics-graph
+            chart_type: line
+            period: hour
+            days_to_show: 1
+            entities:
+              - entity: sensor.water_heater_cloud_power
+                name: Ισχύς
+        column_span: 2
+
+      - type: grid
+        title: Αυτοματισμός
+        cards:
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: automation.gsw_smart_hot_water_v22_elite
+                name: GSW Smart Hot Water
+              - entity: automation.gsw_boiler_safety
+                name: GSW Boiler Safety (watchdog)
+
+  # =====================================================================
+  - title: Ρυθμίσεις
+    path: config
+    icon: mdi:tune
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        title: Στατικές παράμετροι blueprint (αναφορά)
+        cards:
+          - type: markdown
+            content: |
+              ## ⚙️ Παράμετροι αυτοματισμού
+              Αυτές ορίζονται **μία φορά** στη φόρμα του blueprint
+              (Settings → Automations → GSW → Edit). Εδώ φαίνονται σαν αναφορά.
+
+              | Παράμετρος | Τιμή (παράδειγμα) |
+              |---|---|
+              | `cold_threshold` | 16 °C |
+              | `target_temp_cold` | 58 °C |
+              | `target_temp_warm` | 50 °C |
+              | `max_water_temp` | 75 °C (0 = off) |
+              | `solar_temp_threshold` | 45 °C |
+              | `max_time_cold` | 70 min |
+              | `max_time_warm` | 55 min |
+              | `require_presence` | on |
+              | `solar_mode` | off / flag / temperature / both |
+              | `defrost_enable` | off |
+              | `defrost_water_temp` | 4 °C |
+              | `defrost_outdoor_temp` | 2 °C |
+              | `defrost_start_time` | 03:00 |
+              | `defrost_end_time` | 05:00 |
+              | `defrost_check_interval` | 5 min |
+
+              > Άλλαξε τις τιμές από τη φόρμα του blueprint, όχι εδώ.
+      - type: grid
+        title: Προγράμματα
+        cards:
+          - type: markdown
+            content: |
+              ## 🕒 6 προγράμματα
+              Κάθε πρόγραμμα έχει **δικό του διακόπτη** και **στόχο**
+              (`0` = αυτόματο ανάλογα με κρύο/ήπιο).
+
+              | # | Ώρα | Ενεργό | Στόχος |
+              |---|---|---|---|
+              | 1 | 06:00 | — | 0 (auto) |
+              | 2 | — | — | 0 (auto) |
+              | 3 | — | — | 0 (auto) |
+              | 4 | — | — | 0 (auto) |
+              | 5 | — | — | 0 (auto) |
+              | 6 | — | — | 0 (auto) |
+
+              > Τα ανενεργά προγράμματα με ώρα `00:00` **δεν** τρέχουν.
+      - type: grid
+        title: Χρήστες & ζώνες
+        cards:
+          - type: markdown
+            content: |
+              ## 👥 Παρουσία
+              Ο αυτοματισμός ανάβει μόνο αν κάποιος επιλεγμένος χρήστης
+              είναι σε επιλεγμένη ζώνη.
+
+              - **User 1** (υποχρεωτικός) + ζώνες
+              - **User 2** (προαιρετικός) + ζώνες
+              - `require_presence` = on/off
+
+              > Όρισε πρόσωπα/ζώνες στη φόρμα του blueprint.
+      - type: grid
+        title: Ειδοποιήσεις & helpers
+        cards:
+          - type: markdown
+            content: |
+              ## 🔔 Προαιρετικά
+              - `notify_target` — υπηρεσία ειδοποίησης
+              - `last_reason` — input_text με τον λόγο
+              - `boiler_status_entity` — input_select κατάστασης λέβητα
+              - `time_left_entity` / `time_left_pct_entity` — αντίστροφη μέτρηση
+
+              Όλα **προαιρετικά**: αν μείνουν κενά, ο αυτοματισμός δουλεύει κανονικά.
+      - type: grid
+        title: Έλεγχοι ασφαλείας
+        cards:
+          - type: markdown
+            content: |
+              ## 🛡️ Πότε ΔΕΝ θερμαίνει
+              - Νερό ήδη ζεστό (≥ `max_water_temp`)
+              - Αισθητήρας νερού `unknown/unavailable`
+              - `water_temperature_check` = ON
+              - Κανείς δεν είναι σπίτι (αν `require_presence` = on)
+              - Ο θερμοσίφωνας είναι ήδη ON
+              - Solar skip ενεργό (ανάλογα με `solar_mode`)

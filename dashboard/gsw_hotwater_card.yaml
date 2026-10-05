@@ -1,0 +1,152 @@
+# ==========================================================================
+#  GSW Smart Hot Water ELITE — Compact κάρτα (αντίγραφο-επικόλληση)
+#
+#  Βάλε το σε ένα dashboard: Edit -> + Add card -> Manual -> επικόλλησε.
+#  ΜΟΝΟ built-in κάρτες. Άλλαξε τα entity ids αν χρειάζεται.
+#  ΣΗΜΕΙΩΣΗ: Τα input_number.gsw_time_left_minutes / gsw_time_left_pct και
+#  input_text.gsw_last_reason είναι ΠΡΟΑΙΡΕΤΙΚΑ. Αν δεν τα έχεις, σβήσε τις
+#  γραμμές τους (θα φαίνονται "unavailable").
+#
+# ==========================================================================
+type: vertical-stack
+cards:
+  # ---------- Επικεφαλίδα κατάστασης ----------
+  - type: markdown
+    content: |
+      {% set s = states('input_select.gsw_hotwater_status') %}
+      {% set meta = {
+           'Heating':        ['🔥', 'Θέρμανση'],
+           'Target reached': ['✅', 'Έτοιμο'],
+           'Idle':           ['⏸️', 'Αναμονή'],
+           'Blocked':        ['⛔', 'Μπλοκαρισμένο'],
+           'Solar skip':     ['☀️', 'Παράλειψη ηλιακού'],
+           'Defrost':        ['❄️', 'Defrost'],
+           'Boost':          ['⚡', 'Boost']
+         }.get(s, ['💧', s if s != 'unknown' else '—']) %}
+      # {{ meta[0] }} {{ meta[1] }}
+      **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') }} °C
+      **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') }} °C
+      **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') }} °C
+      **Πρόοδος:** {{ states('input_number.gsw_hotwater_progress') }} % ·
+      **Υπόλοιπο:** {{ states('input_number.gsw_time_left_minutes') }} min
+      {% if states('input_text.gsw_last_reason') not in ['unknown',''] %}
+      **Λόγος:** {{ states('input_text.gsw_last_reason') }}
+      {% endif %}
+
+  # ---------- Gauges ----------
+  - type: horizontal-stack
+    cards:
+      - type: gauge
+        entity: sensor.temperature_esp_temperature_esp
+        name: Νερό
+        unit: "°C"
+        min: 0
+        max: 90
+        needle: true
+        severity:
+          green: 45
+          yellow: 30
+          red: 0
+      - type: gauge
+        entity: sensor.temperature_esp_outside_temperature
+        name: Συλλέκτης
+        unit: "°C"
+        min: 0
+        max: 90
+        needle: true
+      - type: gauge
+        entity: input_number.gsw_hotwater_progress
+        name: Πρόοδος
+        unit: "%"
+        min: 0
+        max: 100
+        needle: true
+
+  # ---------- Χειριστήρια ----------
+  - type: tile
+    entity: switch.smart_power_outlet_1
+    name: Θερμοσίφωνας (ρελέ)
+    icon: mdi:power
+  - type: tile
+    entity: input_boolean.gsw_smart_hotwater_enable
+    name: Έξυπνος έλεγχος (master)
+    icon: mdi:water-boiler
+  - type: tile
+    entity: input_boolean.water_temperature_check
+    name: Μπλοκάρισμα θέρμανσης
+    icon: mdi:water-off
+
+  # ---------- Boost ----------
+  - type: entities
+    title: ⚡ Boost
+    show_header_toggle: false
+    entities:
+      - entity: input_button.gsw_hotwater_boost
+        name: Άμεσο boost
+      - entity: input_number.gsw_boost_target_temp
+        name: Στόχος
+      - entity: input_number.gsw_boost_minutes
+        name: Λεπτά
+      - entity: input_select.gsw_boost_mode
+        name: Λειτουργία
+
+  # ---------- Όλες οι λεπτομέρειες (expandable) ----------
+  - type: entities
+    title: Λεπτομέρειες
+    show_header_toggle: false
+    entities:
+      - type: section
+        label: Κατάσταση
+      - entity: input_select.gsw_hotwater_status
+        name: Κατάσταση (EN)
+      - entity: input_select.gsw_boiler_status
+        name: Κατάσταση λέβητα (EL)
+      - entity: input_number.gsw_hotwater_progress
+        name: Πρόοδος %
+      - entity: input_number.gsw_time_left_minutes
+        name: Υπόλοιπο (min)
+      - entity: input_number.gsw_time_left_pct
+        name: Υπόλοιπο %
+      - entity: input_datetime.water_heater_on
+        name: Τελευταία ενεργοποίηση
+      - entity: input_text.gsw_last_reason
+        name: Λόγος τελευταίας ενέργειας
+      - type: section
+        label: Ηλιακός / θερμοκρασίες
+      - entity: sensor.temperature_esp_temperature_esp
+        name: Νερό χρήσης
+      - entity: sensor.temperature_esp_outside_temperature
+        name: Συλλέκτης
+      - entity: sensor.gw2000a_outdoor_temperature
+        name: Έξω
+      - entity: input_boolean.gsw_solar_skip
+        name: Solar skip (χειροκίνητο)
+      - type: section
+        label: Κατανάλωση / σύστημα
+      - entity: sensor.water_heater_cloud_power
+        name: Ισχύς θερμοσίφωνα
+      - entity: switch.water_heater_cloud
+        name: Cloud έλεγχος
+      - entity: binary_sensor.rpi_power_status
+        name: Τροφοδοσία Raspberry Pi
+      - entity: sensor.uptime_4
+        name: Uptime
+      - type: section
+        label: Αυτοματισμοί
+      - entity: automation.gsw_smart_hot_water_v22_elite
+        name: GSW Smart Hot Water
+      - entity: automation.gsw_boiler_safety
+        name: GSW Boiler Safety (watchdog)
+
+  # ---------- Ιστορικό ----------
+  - type: history-graph
+    title: Ιστορικό 24 ωρών
+    hours_to_show: 24
+    refresh_interval: 60
+    entities:
+      - entity: sensor.temperature_esp_temperature_esp
+        name: Νερό χρήσης
+      - entity: sensor.temperature_esp_outside_temperature
+        name: Συλλέκτης
+      - entity: sensor.gw2000a_outdoor_temperature
+        name: Έξω

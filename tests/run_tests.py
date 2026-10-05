@@ -335,6 +335,74 @@ def test_ha_blueprint_save() -> None:
         print(f"        {p}")
 
 
+BUILTIN_CARDS = {
+    "markdown", "gauge", "tile", "entities", "history-graph",
+    "statistics-graph", "button", "horizontal-stack", "vertical-stack",
+    "grid", "heading", "section", "if", "custom",
+    # view types (not cards, but appear as "type" in the YAML)
+    "sections", "masonry", "panel", "sidebar",
+}
+
+
+def test_dashboard_files() -> None:
+    """The shipped dashboard/card YAML must parse and use only built-in cards."""
+    print("test_dashboard_files")
+    dash_dir = ROOT / "dashboard"
+    files = sorted(dash_dir.glob("*.yaml"))
+    check(bool(files), "dashboard/ has YAML files")
+    env = Environment()
+    for path in files:
+        raw = path.read_text(encoding="utf-8")
+        try:
+            data = yaml.safe_load(raw)
+        except yaml.YAMLError as exc:
+            check(False, f"{path.name} parses ({exc})")
+            continue
+        check(isinstance(data, dict), f"{path.name} parses to a mapping")
+
+        types: set[str] = set()
+
+        def walk(obj):
+            if isinstance(obj, dict):
+                t = obj.get("type")
+                if isinstance(t, str):
+                    types.add(t)
+                for v in obj.values():
+                    walk(v)
+            elif isinstance(obj, list):
+                for v in obj:
+                    walk(v)
+
+        walk(data)
+        # 'numeric-input' etc. are tile FEATURES, not card types - ignore them.
+        card_types = types - {"numeric-input", "toggle", "slider",
+                              "buttons", "select-options", "trend-graph"}
+        unknown = {t for t in card_types if t not in BUILTIN_CARDS}
+        check(not unknown, f"{path.name}: only built-in cards (unknown: {sorted(unknown)})")
+
+        bad = []
+        for node in walk_strings(data):
+            if "{{" in node or "{%" in node:
+                try:
+                    env.parse(node)
+                except Exception as exc:  # noqa: BLE001
+                    bad.append((node[:50], str(exc)))
+        check(not bad, f"{path.name}: all Jinja templates parse")
+        for snippet, err in bad:
+            print(f"        bad: {snippet!r} -> {err}")
+
+
+def walk_strings(obj):
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            yield from walk_strings(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from walk_strings(v)
+
+
 def main() -> int:
     for name in BLUEPRINTS:
         print(f"\n===== Validating {name} =====")
@@ -348,6 +416,7 @@ def main() -> int:
     test_manifest()
     test_no_forbidden_mentions()
     test_ha_blueprint_save()
+    test_dashboard_files()
     print()
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")
