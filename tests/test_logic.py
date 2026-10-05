@@ -119,9 +119,12 @@ DEFROST = """{% if not defrost_enabled or trigger_id != 'defrost_t' %}
      and w <= defrost_water
      and (outdoor_temp_sensor_entity in ['', none] or o <= defrost_outdoor)
      and not is_state(water_temp_check_entity, 'on')
+     and not (max_water_temp_val | float(0) > 0 and w >= (max_water_temp_val | float(0)))
      and water_temp_state not in ['unknown','unavailable','none','']
      and not boiler_on }}
 {% endif %}"""
+
+MAX_TEMP = "{{ max_water > 0 and water_now >= max_water }}"
 
 PROGRESS = "{{ ([[ (hb_current / hb_target * 100) | round(0), 100 ] | min, 0] | max if hb_target > 0 else 0) | int }}"
 
@@ -140,6 +143,7 @@ DECIDE = """{% if not master_on %}master_off
 {% elif not presence_ok %}no_presence
 {% elif water_state in ['unknown','unavailable','none',''] %}sensor_bad
 {% elif check_on %}blocked_check
+{% elif max_temp %}max_temp
 {% elif solar_skip %}solar_skip
 {% elif water_val >= heat_below %}temp_ok
 {% elif boiler_on %}already_on
@@ -285,7 +289,7 @@ def test_defrost() -> None:
     print("test_defrost (exact trigger, window, empty outdoor sensor)")
     base = dict(defrost_enabled=True, trigger_id="defrost_t",
                 defrost_start="03:00:00", defrost_end="05:00:00", defrost_water=4,
-                defrost_outdoor=2, w=3, o=1,
+                defrost_outdoor=2, w=3, o=1, max_water_temp_val=75,
                 outdoor_temp_sensor_entity="sensor.outdoor",
                 water_temp_check_entity="", water_temp_state="3.0", boiler_on=False)
     env = _make_env({}, {}, datetime(2026, 1, 1, 4, 0))
@@ -337,6 +341,32 @@ def test_heat_below() -> None:
           "40 below 45 -> heat")
 
 
+def test_boost_and_defrost_gate() -> None:
+    print("test_boost_and_defrost_gate (safety max blocks boost + defrost)")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0))
+    check(render(env, MAX_TEMP, water_now=76, max_water=75) == "True",
+          "boost water 76 >= max 75 -> blocked")
+    check(render(env, MAX_TEMP, water_now=75, max_water=75) == "True",
+          "boost water exactly 75 -> blocked")
+    check(render(env, MAX_TEMP, water_now=74.9, max_water=75) == "False",
+          "boost water below max -> allowed")
+    check(render(env, MAX_TEMP, water_now=90, max_water=0) == "False",
+          "max 0 disables the safety cap")
+    base = dict(defrost_enabled=True, trigger_id="defrost_t",
+                defrost_start="03:00:00", defrost_end="05:00:00", defrost_water=80,
+                defrost_outdoor=2, w=78, o=1, max_water_temp_val=75,
+                outdoor_temp_sensor_entity="sensor.outdoor",
+                water_temp_check_entity="input_boolean.check", boiler_on=False,
+                water_temp_state="78")
+    e = _make_env({"sensor.outdoor": "1", "input_boolean.check": "off"}, {},
+                  datetime(2026, 1, 1, 3, 30))
+    check(render(e, DEFROST, **base) == "False",
+          "defrost water 78 >= safety max 75 -> no defrost")
+    base["max_water_temp_val"] = 0
+    check(render(e, DEFROST, **base) == "True",
+          "safety max 0 -> defrost allowed")
+
+
 def test_scenarios() -> None:
     print("test_scenarios (full gate chain across combinations)")
     env = _make_env({}, {}, datetime(2026, 1, 1, 16, 3))
@@ -344,7 +374,7 @@ def test_scenarios() -> None:
     def decide(**kw):
         base = dict(master_on=True, water_state="40.0", boiler_on=False,
                     check_on=False, presence_ok=True, solar_skip=False,
-                    water_val=40.0, heat_below=45.0)
+                    water_val=40.0, heat_below=45.0, max_temp=False)
         base.update(kw)
         return render(env, DECIDE, **base)
 
@@ -361,6 +391,9 @@ def test_scenarios() -> None:
         ("water above threshold -> temp_ok", {"water_val": 50.0}, "temp_ok"),
         ("water below threshold -> heat", {"water_val": 44.9}, "heat"),
         ("water exactly at threshold -> temp_ok", {"water_val": 45.0}, "temp_ok"),
+        ("water at safety max -> max_temp", {"water_val": 75.0, "max_temp": True}, "max_temp"),
+        ("safety max beats solar", {"water_val": 80.0, "max_temp": True,
+                                    "solar_skip": True}, "max_temp"),
         ("boiler already on + water low -> already_on", {"boiler_on": True}, "already_on"),
         # priority: the earlier gate wins
         ("master off beats all", {"master_on": False, "presence_ok": False,
@@ -428,6 +461,7 @@ def main() -> int:
     test_defrost()
     test_progress()
     test_heat_below()
+    test_boost_and_defrost_gate()
     test_scenarios()
     test_reason()
     test_time_left()

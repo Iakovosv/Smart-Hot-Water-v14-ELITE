@@ -203,6 +203,41 @@ blueprint:
           step: 1
           unit_of_measurement: "°C"
 
+    solar_temp_threshold:
+      name: Solar collector threshold °C (Όριο θερμοκρασίας συλλέκτη °C)
+      description: >
+        [EN] Skip heating when the collector/panel temp is ABOVE this value.
+        [EL] Παράλειψη θέρμανσης όταν η θερμοκρασία συλλέκτη/panel είναι ΠΑΝΩ
+        από αυτή τη τιμή.
+      default: 45
+      selector:
+        number:
+          min: 20
+          max: 120
+          step: 1
+          unit_of_measurement: "°C"
+
+    max_water_temp:
+      name: >-
+        Domestic hot water already-hot cap °C
+        (Ζεστό νερό χρήσης - όριο «μην ανάψει» °C)
+      description: >
+        [EN] Uses the water sensor (boiler / domestic hot water, NOT the
+        collector). If the boiler water is at or above this value, heating
+        never starts (it is already hot) - for schedules, boost and defrost.
+        0 disables the cap.
+        [EL] Χρησιμοποιεί τον αισθητήρα νερού (μποιλερ / ζεστό νερό χρήσης,
+        ΟΧΙ τον συλλέκτη). Αν το νερό του μποιλερ είναι ίσο ή πάνω από αυτή
+        την τιμή, δεν ανάβει ποτέ (είναι ήδη ζεστό) - για προγράμματα, boost
+        και defrost. Το 0 το απενεργοποιεί.
+      default: 75
+      selector:
+        number:
+          min: 0
+          max: 95
+          step: 1
+          unit_of_measurement: "°C"
+
     max_time_cold:
       name: Max run time - cold (min) (Μέγιστος χρόνος - κρύο)
       default: 70
@@ -417,20 +452,6 @@ blueprint:
           domain: sensor
           device_class: temperature
 
-    solar_temp_threshold:
-      name: Solar collector threshold °C (Όριο θερμοκρασίας συλλέκτη °C)
-      description: >
-        [EN] Skip heating when the collector/panel temp is ABOVE this value.
-        [EL] Παράλειψη θέρμανσης όταν η θερμοκρασία συλλέκτη/panel είναι ΠΑΝΩ
-        από αυτή τη τιμή.
-      default: 45
-      selector:
-        number:
-          min: 20
-          max: 120
-          step: 1
-          unit_of_measurement: "°C"
-
     # ------------------------------------------------------------------ #
     # Defrost
     # ------------------------------------------------------------------ #
@@ -630,6 +651,7 @@ variables:
   warm_temp: !input target_temp_warm
   max_cold_time: !input max_time_cold
   max_warm_time: !input max_time_warm
+  max_water_temp_val: !input max_water_temp
 
   # Schedules
   sched_enabled:
@@ -744,6 +766,11 @@ action:
                     value_template: "{{ is_state(water_temp_check_entity, 'on') }}"
                 then:
                   - stop: "Heating blocked by water temperature check"
+              - if:
+                  - condition: template
+                    value_template: "{{ max_water_temp_val | float(0) > 0 and (states(water_temp_sensor_entity) | float(0)) >= (max_water_temp_val | float(0)) }}"
+                then:
+                  - stop: "Water already at/above safety max"
               - service: switch.turn_on
                 target:
                   entity_id: !input boiler_switch
@@ -919,6 +946,7 @@ action:
                                    and w <= defrost_water
                                    and (outdoor_temp_sensor_entity in ['', none] or o <= defrost_outdoor)
                                    and not is_state(water_temp_check_entity, 'on')
+                                   and not (max_water_temp_val | float(0) > 0 and w >= (max_water_temp_val | float(0)))
                                    and states(water_temp_sensor_entity) not in ['unknown','unavailable','none','']
                                    and not is_state(boiler_switch_entity, 'on') }}
                               {% endif %}
@@ -1055,6 +1083,7 @@ action:
                               {%- elif not presence_ok -%}no_presence
                               {%- elif states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] -%}sensor_bad
                               {%- elif is_state(water_temp_check_entity, 'on') -%}blocked_check
+                              {%- elif (max_water_temp_val | float(0) > 0) and ((states(water_temp_sensor_entity) | float(0)) >= (max_water_temp_val | float(0))) -%}max_temp
                               {%- elif solar_skip -%}solar_skip
                               {%- elif (states(water_temp_sensor_entity) | float(0)) >= (heat_below | float(0)) -%}temp_ok
                               {%- elif is_state(boiler_switch_entity, 'on') -%}already_on
@@ -1091,6 +1120,8 @@ action:
                           value_template: "{{ states(water_temp_sensor_entity) not in ['unknown','unavailable','none',''] }}"
                         - condition: template
                           value_template: "{{ not is_state(water_temp_check_entity, 'on') }}"
+                        - condition: template
+                          value_template: "{{ not (max_water_temp_val | float(0) > 0 and (states(water_temp_sensor_entity) | float(0)) >= (max_water_temp_val | float(0))) }}"
                         - condition: template
                           value_template: "{{ not solar_skip }}"
                         - condition: template
