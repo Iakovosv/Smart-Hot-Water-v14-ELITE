@@ -80,6 +80,8 @@ variables:
   max_on_minutes_val: !input max_on_minutes
   status_entity: !input status_entity
   notify_service_val: !input notify_service
+  status_target: "{{ status_entity if status_entity not in ['', none] else none }}"
+  boiler_switch_target: "{{ boiler_switch_entity if boiler_switch_entity not in ['', none] else none }}"
 
 trigger:
   - platform: time_pattern
@@ -101,14 +103,14 @@ action:
         then:
           - service: switch.turn_off
             target:
-              entity_id: !input boiler_switch
+              entity_id: "{{ boiler_switch_target }}"
           - if:
               - condition: template
                 value_template: "{{ status_entity not in ['', none] }}"
             then:
               - service: input_select.select_option
                 target:
-                  entity_id: !input status_entity
+                  entity_id: "{{ status_target }}"
                 data:
                   option: "Blocked"
           - if:

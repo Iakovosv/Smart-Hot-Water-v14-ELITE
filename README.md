@@ -388,6 +388,15 @@ off → **όχι «ήδη ζεστό»** → όχι αναμμένο → ανά�
 ---
 
 ## Ιστορικό εκδόσεων / Changelog
+### v1.10.2
+- **Ίδια διόρθωση και στο `gsw_boiler_safety.yaml`**: `status_entity` και
+  `boiler_switch` περνούν πλέον από ασφαλείς μεταβλητές (`status_target`,
+  `boiler_switch_target`) αντί για απευθείας `entity_id`.
+- **Exhaustive έλεγχοι «από την αρχή ως το τέλος»**: 512 συνδυασμοί πυλών
+  απόφασης + 256 συνδυασμοί defrost + presence/solar με κενά/γεμάτα
+  προαιρετικά → **0 mismatches**. Το regression test σαρώνει τώρα **και τα δύο**
+  blueprints για κενά-default inputs σε `entity_id`/`service`/`at`.
+
 ### v1.10.1
 - **Διόρθωση αποθήκευσης blueprint**: τα προαιρετικά πεδία (κενό default) δεν
   περνούν πια αυτούσια ως `entity_id`. Ήταν η αιτία του σφάλματος

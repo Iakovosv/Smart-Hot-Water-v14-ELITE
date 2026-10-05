@@ -150,6 +150,19 @@ DECIDE = """{% if not master_on %}master_off
 {% elif boiler_on %}already_on
 {% else %}heat{% endif %}"""
 
+# Exhaustive chain used to prove every combination of optional inputs behaves.
+DECIDE_EX = """{% set p = presence if require_presence_val else True %}
+{%- if not master_on %}master_off
+{%- elif not p %}no_presence
+{%- elif water_state in ['unknown','unavailable','none',''] %}sensor_bad
+{%- elif check_on %}blocked_check
+{%- elif max_water > 0 and water_val >= max_water %}max_temp
+{%- elif solar_skip %}solar_skip
+{%- elif water_val >= heat_below %}temp_ok
+{%- elif boiler_on %}already_on
+{%- else %}heat{% endif %}"""
+
+
 
 def render(env: Environment, template: str, **ctx):
     return env.from_string(template).render(**ctx).strip()
@@ -454,24 +467,32 @@ def test_time_left() -> None:
 
 
 def test_optional_entity_targets() -> None:
-    """Regression: optional inputs with default "" must never reach entity_id raw.
+    """Regression: optional inputs with default "" must never reach a raw
+    entity_id / service / time field.
 
-    Home Assistant rejects an empty-string entity_id on save with
+    Home Assistant rejects an empty string on save with
     "expected 'all' or 'none' at ... target.entity_id". Any input whose default
-    is empty must be wrapped so it resolves to `none` when unset.
+    is empty must be wrapped so it resolves to `none` when unset. Checked for
+    every blueprint in the package.
     """
-    print("test_optional_entity_targets (no empty entity_id)")
-    raw = BLUEPRINT.read_text(encoding="utf-8")
-    blueprint = yaml.safe_load(raw)
-    inputs = blueprint["blueprint"]["input"]
-    empty_default = {
-        k for k, v in inputs.items() if str(v.get("default", "")).strip() == ""
-    }
-    direct = set(re.findall(r"entity_id:\s*!input\s+([A-Za-z0-9_]+)", raw))
-    dangerous = sorted(direct & empty_default)
-    check(not dangerous, f"no empty-default input used directly as entity_id (found: {dangerous})")
+    print("test_optional_entity_targets (no empty entity_id in any blueprint)")
+    bp_dir = BLUEPRINT.parent
+    for bp_path in sorted(bp_dir.glob("*.yaml")):
+        raw = bp_path.read_text(encoding="utf-8")
+        blueprint = yaml.safe_load(raw)
+        inputs = blueprint["blueprint"]["input"]
+        empty_default = {
+            k for k, v in inputs.items()
+            if "default" in v and str(v["default"]).strip() == ""
+        }
+        for field in ("entity_id", "service", "at"):
+            direct = set(re.findall(rf"{field}:\s*!input\s+([A-Za-z0-9_]+)", raw))
+            dangerous = sorted(direct & empty_default)
+            check(not dangerous,
+                  f"{bp_path.name}: no empty-default input used as {field} "
+                  f"(found: {dangerous})")
 
-    # The wrappers must exist and be safe (resolve to `none` when empty).
+    raw = BLUEPRINT.read_text(encoding="utf-8")
     for var in (
         "last_reason_target",
         "boiler_status_target",
@@ -491,6 +512,124 @@ def test_optional_entity_targets() -> None:
           "set optional passes through")
 
 
+def test_exhaustive_combinations() -> None:
+    """Start-to-end check over every combination of optional inputs."""
+    print("test_exhaustive_combinations (every optional combination, start to end)")
+    import itertools
+
+    env = _make_env({}, {}, datetime(2026, 1, 1, 16, 3))
+
+    # --- presence: empty/filled optional users & zones ---
+    pres_env = _make_env(
+        {"person.a": "home", "person.b": "not_home", "zone.z1": "0"},
+        {"zone.z1": {"friendly_name": "Z1"}},
+        datetime(2026, 1, 1, 16, 3),
+    )
+    p_cases = [
+        (False, "", [], "", [], True),                    # disabled -> ok
+        (True, "person.a", ["zone.z1"], "", [], True),    # user1 home
+        (True, "person.b", ["zone.z1"], "", [], False),   # user1 away
+        (True, "", [], "", [], False),                    # enabled, no zones
+        (True, "person.b", [], "person.a", ["zone.z1"], True),   # user2 home
+        (True, "person.b", [], "person.b", ["zone.z1"], False),  # both away
+    ]
+    for req, u1, z1, u2, z2, exp in p_cases:
+        got = render(pres_env, PRESENCE, require_presence_val=req,
+                     user_1_entity=u1, user_1_zones_list=z1,
+                     user_2_entity=u2, user_2_zones_list=z2) == "True"
+        check(got is exp,
+              f"presence req={req} u1={u1!r} zones1={len(z1)} u2={u2!r} -> {got}")
+
+    # --- solar: empty/filled flag & sensor, all modes ---
+    s_cases = [
+        ("off", "", None, 45, False),
+        ("flag", "", None, 45, False),        # empty flag -> no skip
+        ("flag", "on", None, 45, True),
+        ("temperature", "", None, 45, False), # empty sensor -> no skip
+        ("temperature", "", 50.0, 45, True),
+        ("temperature", "", 44.0, 45, False),
+        ("both", "on", 44.0, 45, True),       # flag wins
+        ("both", "", 50.0, 45, True),         # temp wins
+        ("both", "", 40.0, 45, False),        # neither
+    ]
+    for mode, flag, sval, thr, exp in s_cases:
+        smap = {"switch.flag": "on"} if flag == "on" else {}
+        if sval is not None:
+            smap["sensor.sol"] = str(sval)
+        senv = _make_env(smap, {}, datetime(2026, 1, 1, 16, 3))
+        got = render(senv, SOLAR, solar_mode_val=mode,
+                     solar_flag_entity=("switch.flag" if flag else ""),
+                     solar_temp_sensor_entity=("sensor.sol" if sval is not None else ""),
+                     solar_temp_threshold_val=thr) == "True"
+        check(got is exp, f"solar mode={mode} flag={flag!r} sensor={sval} -> {got}")
+
+    # --- full decision chain: every combination of gates ---
+    mism = 0
+    total = 0
+    for (master, req, presence, wstate, wval, hb, mw, check_on,
+         solar, boiler) in itertools.product(
+            [True, False], [True, False], [True, False],
+            ["40.0", "unknown"], [10.0, 50.0], [45.0], [0.0, 75.0],
+            [True, False], [True, False], [True, False]):
+        p = presence if req else True
+        if not master:
+            exp = "master_off"
+        elif not p:
+            exp = "no_presence"
+        elif wstate == "unknown":
+            exp = "sensor_bad"
+        elif check_on:
+            exp = "blocked_check"
+        elif mw > 0 and wval >= mw:
+            exp = "max_temp"
+        elif solar:
+            exp = "solar_skip"
+        elif wval >= hb:
+            exp = "temp_ok"
+        elif boiler:
+            exp = "already_on"
+        else:
+            exp = "heat"
+        got = render(env, DECIDE_EX, master_on=master, require_presence_val=req,
+                     presence=presence, water_state=wstate, water_val=wval,
+                     heat_below=hb, max_water=mw, check_on=check_on,
+                     solar_skip=solar, boiler_on=boiler)
+        total += 1
+        if got != exp:
+            mism += 1
+            if mism <= 5:
+                print(f"    MISMATCH got={got} expected={exp}")
+    check(mism == 0, f"decision chain: {total} combos, {mism} mismatches")
+
+    # --- defrost gate: every combination of its conditions ---
+    dmism = dtotal = 0
+    for (enabled, trig, water, mw, check_on, boiler, wstate, out) in itertools.product(
+            [True, False], ["defrost_t", "sched_1"], [3.0, 8.0], [0.0, 4.0],
+            [True, False], [True, False], ["3.0", "unavailable"], [1.0, 5.0]):
+        exp = (enabled and trig == "defrost_t"
+               and water <= 4.0 and out <= 2.0 and not check_on
+               and not (mw > 0 and water >= mw)
+               and wstate not in ["unknown", "unavailable", "none", ""]
+               and not boiler)
+        denv = _make_env({"input_boolean.c": ("on" if check_on else "off")}, {},
+                         datetime(2026, 1, 1, 3, 30))
+        got = render(denv, DEFROST, defrost_enabled=enabled, trigger_id=trig,
+                     defrost_start="03:00", defrost_end="05:00", o=out,
+                     defrost_water=4.0, defrost_outdoor=2.0,
+                     water_temp_check_entity="input_boolean.c",
+                     max_water_temp_val=mw, w=water, water_temp_state=wstate,
+                     boiler_on=boiler, outdoor_temp_sensor_entity="sensor.o") == "True"
+        dtotal += 1
+        if got != exp:
+            dmism += 1
+            if dmism <= 5:
+                print(f"    DEFROST MISMATCH got={got} expected={exp} "
+                      f"en={enabled} trig={trig} w={water} mw={mw} chk={check_on} "
+                      f"boiler={boiler} state={wstate} out={out}")
+    check(dmism == 0, f"defrost chain: {dtotal} combos, {dmism} mismatches")
+
+
+
 def main() -> int:
     test_presence()
     test_solar()
@@ -505,6 +644,7 @@ def main() -> int:
     test_reason()
     test_time_left()
     test_optional_entity_targets()
+    test_exhaustive_combinations()
     print()
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")
