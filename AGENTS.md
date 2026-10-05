@@ -64,6 +64,15 @@ Sanity-check the harness by adding a bogus domain; it must report
   `condition.async_validate_condition_config` is the *wrong* validator for them.
 - The reverse countdown is driven by `input_number.gsw_time_left_minutes`, which
   the blueprint already counts down; cards just format it as mm:ss.
+- **`repeat/until` timing:** HA evaluates `until` **after** the sequence body,
+  so a `delay` inside the body is NOT interrupted when the condition flips.
+  Verified against `homeassistant/helpers/script.py` and empirically (a
+  condition set true 1s into a 5s delay still waited the full 5s). The boost and
+  scheduled loops poll every 30s, so heating stops within **≤30s** of the target
+  being reached or the max time elapsing - not instantly. Boost has no
+  pre-check against the boost target: pressing it when the water is already
+  above target turns the relay on, then off ≤30s later (the safety cap
+  `max_water_temp` *is* pre-checked).
 - The integration **never** writes `automations.yaml`; it only refreshes the
   blueprint *definition*. Blueprint input values live in `automations.yaml` and
   survive updates (verified against the real HA engine).
