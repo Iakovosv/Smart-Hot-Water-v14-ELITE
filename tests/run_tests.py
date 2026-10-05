@@ -869,6 +869,127 @@ def test_boost_guard_end_to_end() -> None:
         print(f"        {p}")
 
 
+def test_boost_stop_first_of_temp_or_time() -> None:
+    """Real HA engine: the boost loop stops on whichever comes FIRST.
+
+    Runs the real boost action chain with the 30s poll shortened to 1s (test
+    only; logic untouched) and asserts: temperature reaching the target stops
+    it (status Target reached), the max time elapsing stops it (status Idle),
+    and with neither it keeps heating. Skipped (ok) when HA is not installed.
+    """
+    print("test_boost_stop_first_of_temp_or_time (real HA engine, temp OR time)")
+    try:
+        import asyncio  # noqa: PLC0415
+        import time  # noqa: PLC0415
+
+        from homeassistant.components.automation import config as ac  # noqa: PLC0415
+        from homeassistant.components.blueprint import models  # noqa: PLC0415
+        from homeassistant.core import Context, HomeAssistant  # noqa: PLC0415
+        from homeassistant.helpers import config_validation as cv  # noqa: PLC0415
+        from homeassistant.helpers.script import Script  # noqa: PLC0415
+        from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
+    except ImportError:
+        print("  ok   - Home Assistant not installed, skipped")
+        return
+
+    path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
+
+    async def run() -> list[str]:
+        problems: list[str] = []
+        hass = HomeAssistant("")
+        await hass.async_start()
+        cv._hass.hass = hass
+        bp = models.Blueprint(yloader.load_yaml(path), path=path,
+                              schema=ac.AUTOMATION_BLUEPRINT_SCHEMA)
+        inputs = {}
+        for key, spec in bp.inputs.items():
+            default = spec.get("default", "") if isinstance(spec, dict) else ""
+            inputs[key] = SAMPLE_INPUTS.get(key, default)
+        cfg = ac.PLATFORM_SCHEMA(
+            models.BlueprintInputs(
+                bp, {"use_blueprint": {"path": path, "input": inputs}}
+            ).async_substitute())
+
+        # Shorten the boost loop poll from 30s to 1s (test speed only).
+        then_steps = cfg["actions"][0]["choose"][0]["sequence"][0]["then"]
+        repeat = next(s for s in then_steps if "repeat" in s)["repeat"]
+        for step in repeat["sequence"]:
+            if "delay" in step:
+                step["delay"] = {"seconds": 1}
+
+        calls: list[tuple[str, float]] = []
+        statuses: list[str] = []
+        hass.services.async_register("switch", "turn_on",
+                                     lambda c: calls.append(("on", time.monotonic())))
+        hass.services.async_register("switch", "turn_off",
+                                     lambda c: calls.append(("off", time.monotonic())))
+        hass.services.async_register("input_select", "select_option",
+                                     lambda c: statuses.append(c.data.get("option")))
+        for dom, svc in (("input_number", "set_value"),
+                         ("input_datetime", "set_datetime"),
+                         ("input_text", "set_value"),
+                         ("notify", "mobile")):
+            hass.services.async_register(dom, svc, lambda c: None)
+
+        async def case(water0, target, minutes, raise_to=None,
+                       wait=4.0) -> tuple[bool, list[str]]:
+            calls.clear()
+            statuses.clear()
+            states = {
+                "input_boolean.gsw_smart_hotwater_enable": "on",
+                "switch.boiler": "off",
+                "sensor.water": str(water0),
+                "input_number.gsw_boost_target_temp": str(target),
+                "input_number.gsw_boost_minutes": str(minutes),
+                "input_boolean.water_temperature_check": "off",
+                "sensor.out": "15",
+                "input_select.status": "Idle",
+                "input_select.boiler": "Αναμονή",
+            }
+            for entity, state in states.items():
+                hass.states.async_set(entity, state)
+            await hass.async_block_till_done()
+            script = Script(hass, cfg["actions"], "probe", "automation",
+                            variables=cfg["variables"])
+            task = asyncio.create_task(script.async_run(
+                run_variables={"trigger": {"id": "boost"}},
+                context=Context()))
+            if raise_to is not None:
+                await asyncio.sleep(1.5)
+                hass.states.async_set("sensor.water", str(raise_to))
+                await hass.async_block_till_done()
+            await asyncio.sleep(wait)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            await hass.async_block_till_done()
+            return ("off" in [k for k, _ in calls]), list(statuses)
+
+        # 1. Temperature reaches the target first -> stops, status Target reached
+        stopped, st = await case(40, 55, 10, raise_to=56)
+        if not stopped or "Target reached" not in st:
+            problems.append(f"temp-first did not stop with Target reached: {st}")
+        # 2. Max time elapses first -> stops, status Idle
+        stopped, st = await case(40, 55, 0.05)
+        if not stopped or "Idle" not in st:
+            problems.append(f"time-first did not stop with Idle: {st}")
+        # 3. Neither -> keeps heating (no turn_off)
+        stopped, st = await case(40, 55, 10)
+        if stopped:
+            problems.append(f"neither case stopped unexpectedly: {st}")
+
+        await hass.async_stop()
+        return problems
+
+    problems = asyncio.run(run())
+    check(not problems,
+          "boost stops on whichever comes first: temperature OR max time")
+    for p in problems:
+        print(f"        {p}")
+
+
 def main() -> int:
     for name in BLUEPRINTS:
         print(f"\n===== Validating {name} =====")
@@ -883,6 +1004,7 @@ def main() -> int:
     test_no_forbidden_mentions()
     test_ha_blueprint_save()
     test_boost_guard_end_to_end()
+    test_boost_stop_first_of_temp_or_time()
     test_dashboard_files()
     test_helper_coverage()
     test_gauge_and_rounding()
