@@ -629,30 +629,56 @@ def test_ha_card_render() -> None:
         "binary_sensor.rpi_power_status": "on",
     }
 
-    async def run() -> list[str]:
+    async def run() -> tuple[list[str], list[str]]:
+        problems: list[str] = []
+        # Pass 1: realistic values, incl. a raw 15-digit sensor state.
+        # Pass 2: every entity unknown/unavailable - a card must not crash.
+        passes = [states, {k: "unknown" for k in states}]
+        for pass_states in passes:
+            hass = HomeAssistant("")
+            await hass.async_start()
+            for entity, state in pass_states.items():
+                hass.states.async_set(entity, state)
+            await hass.async_block_till_done()
+            for path in sorted((ROOT / "dashboard").rglob("*.yaml")):
+                snippets: list[str] = []
+                walk_markdown(yaml.safe_load(path.read_text(encoding="utf-8")), snippets)
+                for i, snippet in enumerate(snippets):
+                    try:
+                        result = Template(snippet, hass).async_render()
+                        if asyncio.iscoroutine(result):
+                            await result
+                    except Exception as exc:  # noqa: BLE001
+                        problems.append(f"{path.relative_to(ROOT)} #{i}: {exc}")
+            await hass.async_stop()
+        return problems
+
+    problems = asyncio.run(run())
+    check(not problems, "all dashboard/card templates render on real HA "
+                        "(normal values AND all-unknown states)")
+    for p in problems:
+        print(f"        {p}")
+
+    # The rounding must actually show one decimal, not the raw 15-digit state.
+    async def render_sample() -> str:
         hass = HomeAssistant("")
         await hass.async_start()
         for entity, state in states.items():
             hass.states.async_set(entity, state)
         await hass.async_block_till_done()
-        problems: list[str] = []
-        for path in sorted((ROOT / "dashboard").rglob("*.yaml")):
-            snippets: list[str] = []
-            walk_markdown(yaml.safe_load(path.read_text(encoding="utf-8")), snippets)
-            for i, snippet in enumerate(snippets):
-                try:
-                    result = Template(snippet, hass).async_render()
-                    if asyncio.iscoroutine(result):
-                        await result
-                except Exception as exc:  # noqa: BLE001
-                    problems.append(f"{path.relative_to(ROOT)} #{i}: {exc}")
+        snippets: list[str] = []
+        walk_markdown(
+            yaml.safe_load((ROOT / "dashboard" / "gsw_hotwater_card.yaml").read_text(encoding="utf-8")),
+            snippets)
+        out = "\n".join(Template(s, hass).async_render() for s in snippets)
         await hass.async_stop()
-        return problems
+        return out
 
-    problems = asyncio.run(run())
-    check(not problems, "all dashboard/card templates render on real HA")
-    for p in problems:
-        print(f"        {p}")
+    rendered = asyncio.run(render_sample())
+    check("40.8" in rendered,
+          "rendered card shows 1 decimal (40.812… -> 40.8)")
+    check("40.8120002746582" not in rendered,
+          "rendered card does not leak the raw 15-digit sensor state")
 
     # Negative control: the OLD (buggy) template must fail on this engine,
     # proving the check above is actually capable of catching the regression.
