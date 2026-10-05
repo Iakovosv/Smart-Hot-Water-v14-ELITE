@@ -90,6 +90,33 @@ cards:
       - entity: input_select.gsw_boost_mode
         name: Λειτουργία
 
+  # ---------- Αντίστροφη μέτρηση (μόνο όταν θερμαίνει/boost/defrost) ----------
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: input_select.gsw_hotwater_status
+        state:
+          - Heating
+          - Boost
+          - Defrost
+    card:
+      type: markdown
+      content: |
+        {% set st = states('input_select.gsw_hotwater_status') %}
+        {% set left = states('input_number.gsw_time_left_minutes') | float(0) %}
+        {% set on = states('input_datetime.water_heater_on') %}
+        {% if on not in ['unknown', 'unavailable', ''] %}
+          {% set secs = [left * 60 - (now().timestamp() - as_timestamp(on)), 0] | max %}
+        {% else %}
+          {% set secs = left * 60 %}
+        {% endif %}
+        ## {{ {'Heating': '🔥 Θέρμανση', 'Boost': '⚡ Boost', 'Defrost': '❄️ Defrost'}.get(st, st) }}
+        <div style="text-align:center">
+        <span style="font-size:2.4em;font-weight:700">{{ '%02d' | format((secs // 60) | int) }}:{{ '%02d' | format((secs % 60) | int) }}</span>
+        <div style="font-size:0.85em;opacity:0.7">υπόλοιπος χρόνος — μετρά αντίστροφα</div>
+        </div>
+        **Νερό:** {{ states('sensor.temperature_esp_temperature_esp') }} °C
+
   # ---------- Όλες οι λεπτομέρειες (expandable) ----------
   - type: entities
     title: Λεπτομέρειες

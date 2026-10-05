@@ -22,7 +22,10 @@ dashboard/
     ├── 07-consumption.yaml
     ├── 08-history.yaml
     ├── 09-consumption-graph.yaml
-    └── 10-automations.yaml
+    ├── 10-automations.yaml
+    ├── 11-conditional-heating.yaml      ← conditional + αντίστροφη μέτρηση
+    ├── 12-conditional-countdown.yaml    ← conditional countdown (απλή)
+    └── 13-conditional-time-bar.yaml     ← conditional μπάρα υπολοίπου
 ```
 
 ---
@@ -72,9 +75,45 @@ Edit → **+ Add card** → **Manual** → επικόλλησε το περιε�
 | 08 | `08-history.yaml` | history-graph | Γράφημα θερμοκρασιών 24h |
 | 09 | `09-consumption-graph.yaml` | statistics-graph | Στατιστικά κατανάλωσης ανά ώρα |
 | 10 | `10-automations.yaml` | entities | Κατάσταση των 2 αυτοματισμών (main + watchdog) |
+| 11 | `11-conditional-heating.yaml` | conditional | **Εμφανίζεται μόνο όταν θερμαίνει** — live αντίστροφη μέτρηση mm:ss + μπάρα |
+| 12 | `12-conditional-countdown.yaml` | conditional | Countdown ανά κατάσταση (Θέρμανση/Boost/Defrost) |
+| 13 | `13-conditional-time-bar.yaml` | conditional | Μπάρα που **γεμίζει ανάποδα** + μεγάλο mm:ss |
 
 > **Σημείωση:** τα `02` και `05` δείχνουν τα ίδια δεδομένα με διαφορετικό στυλ.
 > Χρησιμοποίησε **ένα** από τα δύο.
+
+---
+
+## ⏳ Αντίστροφη μέτρηση (υπόλοιπος χρόνος)
+
+Ο αυτοματισμός **αποφασίζει τον μέγιστο χρόνο** από την **εξωτερική
+θερμοκρασία**:
+
+| Συνθήκη | Μέγιστος χρόνος |
+|---|---|
+| `outdoor < cold_threshold` (κρύο) | `max_time_cold` (π.χ. 70 min) |
+| αλλιώς (ήπιο) | `max_time_warm` (π.χ. 55 min) |
+| Boost | `boost_minutes` (input_number) |
+
+Μετά, **κάθε 30s** γράφει το **υπόλοιπο** στα προαιρετικά helpers:
+- `input_number.gsw_time_left_minutes` — λεπτά που απομένουν (μετρά **αντίστροφα**)
+- `input_number.gsw_time_left_pct` — το ίδιο ως % (για μπάρα)
+
+Οι κάρτες **11 / 12 / 13** διαβάζουν αυτά + το `input_datetime.water_heater_on`
+και δείχνουν **live mm:ss** (δεν περιμένουν το επόμενο 30s), μετράντας προς
+τα κάτω. Όταν τελειώσει η θέρμανση, το υπόλοιπο γίνεται `0`.
+
+### Προϋπόθεση
+Στη φόρμα του blueprint, βάλε:
+- **Time left minutes** → `input_number.gsw_time_left_minutes`
+- **Time left percent** → `input_number.gsw_time_left_pct` *(προαιρετικό, για τις μπάρες)*
+
+Αν τα αφήσεις **κενά**, ο αυτοματισμός δουλεύει κανονικά — απλώς οι
+conditional κάρτες δεν θα έχουν τιμή να δείξουν.
+
+### Πότε εμφανίζονται
+Μόνο όταν `input_select.gsw_hotwater_status` ∈ `Heating` / `Boost` / `Defrost`.
+Τις υπόλοιπες ώρες **εξαφανίζονται** — καθαρό dashboard.
 
 ---
 
@@ -85,9 +124,9 @@ Edit → **+ Add card** → **Manual** → επικόλλησε το περιε�
 | `input_select.gsw_hotwater_status` | Κατάσταση λέβητα (EN) | 01, 06 |
 | `input_select.gsw_boiler_status` | Κατάσταση λέβητα (EL) | 06 |
 | `input_number.gsw_hotwater_progress` | Πρόοδος θέρμανσης % | 01, 02, 05, 06 |
-| `input_number.gsw_time_left_minutes` | Υπόλοιπο χρόνου (min) * | 01, 06 |
-| `input_number.gsw_time_left_pct` | Υπόλοιπο χρόνου % * | 06 |
-| `input_datetime.water_heater_on` | Τελευταία ενεργοποίηση | 06 |
+| `input_number.gsw_time_left_minutes` | Υπόλοιπο χρόνου (min) * | 01, 06, 11, 12, 13 |
+| `input_number.gsw_time_left_pct` | Υπόλοιπο χρόνου % * | 06, 11, 13 |
+| `input_datetime.water_heater_on` | Τελευταία ενεργοποίηση | 06, 11, 12, 13 |
 | `input_text.gsw_last_reason` | Λόγος τελευταίας ενέργειας * | 01, 06 |
 | `sensor.temperature_esp_temperature_esp` | Νερό χρήσης °C | 01, 02, 05, 08 |
 | `sensor.temperature_esp_outside_temperature` | Συλλέκτης ηλιακού °C | 01, 02, 05, 08 |

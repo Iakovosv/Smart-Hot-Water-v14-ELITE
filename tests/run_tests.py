@@ -338,7 +338,7 @@ def test_ha_blueprint_save() -> None:
 BUILTIN_CARDS = {
     "markdown", "gauge", "tile", "entities", "history-graph",
     "statistics-graph", "button", "horizontal-stack", "vertical-stack",
-    "grid", "heading", "section", "if", "custom",
+    "grid", "heading", "section", "if", "custom", "conditional",
     # view types (not cards, but appear as "type" in the YAML)
     "sections", "masonry", "panel", "sidebar",
 }
@@ -404,6 +404,67 @@ def walk_strings(obj):
             yield from walk_strings(v)
 
 
+class _Now:
+    def __init__(self, ts):
+        self._ts = ts
+
+    def timestamp(self):
+        return self._ts
+
+    def strftime(self, fmt):
+        import datetime
+
+        return datetime.datetime.fromtimestamp(self._ts).strftime(fmt)
+
+
+def test_countdown_render() -> None:
+    """Render the countdown cards' templates and check the mm:ss math.
+
+    This is a real functional check of the reverse-timer logic: with 30 min
+    left and the heater turned on 10 min ago, the card must show ~20:00.
+    """
+    print("test_countdown_render")
+    import datetime
+
+    cards = sorted((ROOT / "dashboard" / "cards").glob("1[123]-*.yaml"))
+    check(len(cards) == 3, "three conditional countdown cards exist")
+    env = Environment()
+    env.globals["as_timestamp"] = lambda v: v
+    now_ts = 1_700_000_000.0
+    started = now_ts - 10 * 60  # turned on 10 minutes ago
+    sample = {
+        "input_select.gsw_hotwater_status": "Heating",
+        "input_number.gsw_time_left_minutes": "30",
+        "input_number.gsw_time_left_pct": "50",
+        "input_datetime.water_heater_on": started,
+        "sensor.temperature_esp_temperature_esp": "48",
+        "sensor.temperature_esp_outside_temperature": "52",
+        "sensor.gw2000a_outdoor_temperature": "14",
+    }
+    for path in cards:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        content = data["card"]["content"]
+        env.globals["states"] = lambda e: sample.get(e, "unknown")
+        env.globals["now"] = lambda: _Now(now_ts)
+        try:
+            out = env.from_string(content).render()
+        except Exception as exc:  # noqa: BLE001
+            check(False, f"{path.name} renders ({exc})")
+            continue
+        # 30 min left - 10 min elapsed = 20:00
+        check("20:00" in out,
+              f"{path.name} shows 20:00 with 30min left / 10min elapsed")
+
+        # Conditional conditions must be OR (a single state condition with a
+        # list of states), otherwise the card would never show.
+        cond = data["conditions"][0]
+        states = cond.get("state")
+        if cond.get("condition") == "or":
+            states = [c.get("state") for c in cond.get("conditions", [])]
+        check(isinstance(states, list) and len(states) >= 2,
+              f"{path.name} shows for Heating/Boost/Defrost (OR)")
+
+
 def main() -> int:
     for name in BLUEPRINTS:
         print(f"\n===== Validating {name} =====")
@@ -418,6 +479,7 @@ def main() -> int:
     test_no_forbidden_mentions()
     test_ha_blueprint_save()
     test_dashboard_files()
+    test_countdown_render()
     print()
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")

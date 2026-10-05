@@ -329,7 +329,7 @@ panel/συλλέκτη** — ώστε να **μην ανάβει** όταν ο �
 |---|---|
 | [`dashboard/gsw_hotwater_dashboard.yaml`](dashboard/gsw_hotwater_dashboard.yaml) | **Πλήρες dashboard** (2 views: *Κατάσταση* + *Ρυθμίσεις*) με gauges, χειριστήρια, boost, ιστορικό, κατανάλωση και αναφορά **όλων** των παραμέτρων. |
 | [`dashboard/gsw_hotwater_card.yaml`](dashboard/gsw_hotwater_card.yaml) | **Μία κάθετη κάρτα** (vertical-stack) για να την ρίξεις σε υπάρχον dashboard. |
-| [`dashboard/cards/`](dashboard/cards/) | **10 ξεχωριστές κάρτες** — βάλε όποια θέλεις, με όποια σειρά θέλεις. |
+| [`dashboard/cards/`](dashboard/cards/) | **13 ξεχωριστές κάρτες** — βάλε όποια θέλεις, με όποια σειρά θέλεις. |
 
 **Μόνο built-in κάρτες** — δεν χρειάζεται HACS frontend.
 
@@ -346,6 +346,21 @@ panel/συλλέκτη** — ώστε να **μην ανάβει** όταν ο �
 | 08 | `08-history.yaml` | Γράφημα θερμοκρασιών 24h |
 | 09 | `09-consumption-graph.yaml` | Στατιστικά κατανάλωσης |
 | 10 | `10-automations.yaml` | Κατάσταση των 2 αυτοματισμών |
+| 11 | `11-conditional-heating.yaml` | **Conditional**: εμφανίζεται μόνο όταν θερμαίνει — αντίστροφη μέτρηση mm:ss |
+| 12 | `12-conditional-countdown.yaml` | Conditional countdown ανά κατάσταση |
+| 13 | `13-conditional-time-bar.yaml` | Conditional μπάρα που γεμίζει ανάποδα |
+
+### ⏳ Αντίστροφη μέτρηση
+Ο αυτοματισμός διαλέγει **μέγιστο χρόνο** από την εξωτερική θερμοκρασία
+(`max_time_cold` / `max_time_warm` με βάση το `cold_threshold`) και γράφει το
+υπόλοιπο κάθε 30s στα `input_number.gsw_time_left_minutes` / `_pct`. Οι κάρτες
+**11/12/13** το δείχνουν **live mm:ss** μετράντας αντίστροφα, και **εμφανίζονται
+μόνο** όταν η κατάσταση είναι `Heating` / `Boost` / `Defrost`.
+
+> Για να δουλέψει, στη φόρμα του blueprint βάλε **Time left minutes** →
+> `input_number.gsw_time_left_minutes` (και **Time left percent** →
+> `input_number.gsw_time_left_pct` για τις μπάρες). Αλλιώς ο αυτοματισμός
+> δουλεύει κανονικά, απλώς χωρίς μέτρηση.
 
 ### Εγκατάσταση
 1. Settings → **Dashboards** → **+ Add dashboard** → άνοιξέ το → **Edit** (μολύβι).
@@ -427,6 +442,18 @@ off → **όχι «ήδη ζεστό»** → όχι αναμμένο → ανά�
 ---
 
 ## Ιστορικό εκδόσεων / Changelog
+### v1.12.0
+- **3 νέες conditional κάρτες** (`dashboard/cards/11..13`): εμφανίζονται **μόνο**
+  όταν ο θερμοσίφωνας θερμαίνει / κάνει boost / defrost.
+- **Αντίστροφη μέτρηση υπολοίπου χρόνου** με **live mm:ss**: διαβάζει το
+  υπόλοιπο που γράφει ο αυτοματισμός (βάσει `max_time_cold` / `max_time_warm`
+  ανάλογα με την εξωτερική θερμοκρασία) + την ώρα ενεργοποίησης, και μετρά
+  προς τα κάτω χωρίς να περιμένει το επόμενο tick των 30s.
+- Η κάρτα 13 έχει **μπάρα που γεμίζει ανάποδα** (χρόνος που πέρασε).
+- Προστέθηκαν οι conditional κάρτες και στο πλήρες dashboard + στην κάθετη.
+- Το test suite **κάνει render** τα templates της αντίστροφης μέτρησης και
+  ελέγχει το μαθηματικό (30λ υπόλοιπο − 10λ = **20:00**).
+
 ### v1.11.1
 - **10 ξεχωριστές κάρτες** στο `dashboard/cards/` — κάθε μία ανεξάρτητη,
   copy-paste σε όποια σειρά θέλεις (κατάσταση, gauges, χειριστήρια, boost,
@@ -528,7 +555,8 @@ dashboard/
   README.md                          # οδηγός dashboard & καρτών
   gsw_hotwater_dashboard.yaml        # πλήρες dashboard (2 views)
   gsw_hotwater_card.yaml             # μία κάθετη κάρτα (vertical-stack)
-  cards/                             # 10 ξεχωριστές κάρτες (copy-paste)
+  cards/                             # 13 ξεχωριστές κάρτες (copy-paste)
+                                     #   (11-13: conditional + αντίστροφη μέτρηση)
 tests/
   run_tests.py           # structure / inputs / jinja / installer / manifest
                          #   + real HA save validation + dashboard checks
