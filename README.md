@@ -388,6 +388,15 @@ off → **όχι «ήδη ζεστό»** → όχι αναμμένο → ανά�
 ---
 
 ## Ιστορικό εκδόσεων / Changelog
+### v1.10.1
+- **Διόρθωση αποθήκευσης blueprint**: τα προαιρετικά πεδία (κενό default) δεν
+  περνούν πια αυτούσια ως `entity_id`. Ήταν η αιτία του σφάλματος
+  `Message malformed: expected 'all' or 'none' at ... target.entity_id` όταν
+  άφηνες κενά `boiler_status_entity`, `last_reason`, `time_left_entity`,
+  `time_left_pct_entity` (και ασφαλές για `boiler_switch`, `status_entity`,
+  `progress_entity`, `last_on_entity`). Τώρα τα κενά γίνονται `none`.
+- Regression test `test_optional_entity_targets`.
+
 
 ### v1.10.0
 - **Ζεστό νερό χρήσης — «μην ανάψει αν είναι ήδη ζεστό»**: νέο `max_water_temp`

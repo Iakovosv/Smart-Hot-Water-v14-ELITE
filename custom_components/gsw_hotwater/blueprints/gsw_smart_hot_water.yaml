@@ -705,6 +705,16 @@ variables:
   time_left_helper: !input time_left_entity
   time_left_pct_helper: !input time_left_pct_entity
 
+  # Optional helpers resolved to 'none' when empty (avoids empty entity_id)
+  last_reason_target: "{{ last_reason_entity if last_reason_entity not in ['', none] else none }}"
+  boiler_status_target: "{{ boiler_status_helper if boiler_status_helper not in ['', none] else none }}"
+  time_left_target: "{{ time_left_helper if time_left_helper not in ['', none] else none }}"
+  time_left_pct_target: "{{ time_left_pct_helper if time_left_pct_helper not in ['', none] else none }}"
+  boiler_switch_target: "{{ boiler_switch_entity if boiler_switch_entity not in ['', none] else none }}"
+  status_target: "{{ status_entity if status_entity not in ['', none] else none }}"
+  progress_target: "{{ progress_entity if progress_entity not in ['', none] else none }}"
+  last_on_target: "{{ last_on_entity if last_on_entity not in ['', none] else none }}"
+
 trigger:
   - platform: time
     at: !input schedule_1_time
@@ -773,14 +783,14 @@ action:
                   - stop: "Water already at/above safety max"
               - service: switch.turn_on
                 target:
-                  entity_id: !input boiler_switch
+                  entity_id: "{{ boiler_switch_target }}"
               - if:
                   - condition: template
                     value_template: "{{ last_on_entity not in ['', none] }}"
                 then:
                   - service: input_datetime.set_datetime
                     target:
-                      entity_id: !input last_on_entity
+                      entity_id: "{{ last_on_target }}"
                     data:
                       datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
               - if:
@@ -789,7 +799,7 @@ action:
                 then:
                   - service: input_select.select_option
                     target:
-                      entity_id: !input status_entity
+                      entity_id: "{{ status_target }}"
                     data:
                       option: "Boost"
               - if:
@@ -798,7 +808,7 @@ action:
                 then:
                   - service: input_select.select_option
                     target:
-                      entity_id: !input boiler_status_entity
+                      entity_id: "{{ boiler_status_target }}"
                     data:
                       option: "Θέρμανση"
               - variables:
@@ -811,7 +821,7 @@ action:
                       then:
                         - service: input_number.set_value
                           target:
-                            entity_id: !input time_left_entity
+                            entity_id: "{{ time_left_target }}"
                           data:
                             value: >-
                               {{ [ [ (boost_max | float(0)) - ((now().timestamp() - boost_start) / 60), 0 ] | max, boost_max | float(0) ] | min | round(1) }}
@@ -821,7 +831,7 @@ action:
                       then:
                         - service: input_number.set_value
                           target:
-                            entity_id: !input time_left_pct_entity
+                            entity_id: "{{ time_left_pct_target }}"
                           data:
                             value: >-
                               {{ ([[ (((boost_max | float(0)) - ((now().timestamp() - boost_start) / 60)) / ([boost_max | float(0), 1] | max) * 100) | round(0), 100 ] | min, 0] | max) | int }}
@@ -831,7 +841,7 @@ action:
                       then:
                         - service: input_number.set_value
                           target:
-                            entity_id: !input progress_entity
+                            entity_id: "{{ progress_target }}"
                           data:
                             value: >-
                               {{ ([[ ((states(water_temp_sensor_entity) | float(0)) / (boost_target | float(1)) * 100) | round(0), 100 ] | min, 0] | max) | int }}
@@ -846,14 +856,14 @@ action:
                            or states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}
               - service: switch.turn_off
                 target:
-                  entity_id: !input boiler_switch
+                  entity_id: "{{ boiler_switch_target }}"
               - if:
                   - condition: template
                     value_template: "{{ status_entity not in ['', none] }}"
                 then:
                   - service: input_select.select_option
                     target:
-                      entity_id: !input status_entity
+                      entity_id: "{{ status_target }}"
                     data:
                       option: >-
                         {{ 'Target reached' if (states(water_temp_sensor_entity) | float(0)) >= boost_target else 'Idle' }}
@@ -873,7 +883,7 @@ action:
                 then:
                   - service: input_select.select_option
                     target:
-                      entity_id: !input boiler_status_entity
+                      entity_id: "{{ boiler_status_target }}"
                     data:
                       option: >-
                         {{ 'Έτοιμο' if (states(water_temp_sensor_entity) | float(0)) >= boost_target else 'Αναμονή' }}
@@ -883,7 +893,7 @@ action:
                 then:
                   - service: input_number.set_value
                     target:
-                      entity_id: !input time_left_entity
+                      entity_id: "{{ time_left_target }}"
                     data:
                       value: 0
               - if:
@@ -892,7 +902,7 @@ action:
                 then:
                   - service: input_number.set_value
                     target:
-                      entity_id: !input time_left_pct_entity
+                      entity_id: "{{ time_left_pct_target }}"
                     data:
                       value: 0
             else:
@@ -918,7 +928,7 @@ action:
                     then:
                       - service: input_select.select_option
                         target:
-                          entity_id: !input status_entity
+                          entity_id: "{{ status_target }}"
                         data:
                           option: "Blocked"
               # Master switch on -> normal operation
@@ -957,24 +967,24 @@ action:
                             then:
                               - service: input_select.select_option
                                 target:
-                                  entity_id: !input status_entity
+                                  entity_id: "{{ status_target }}"
                                 data:
                                   option: "Defrost"
                           - service: switch.turn_on
                             target:
-                              entity_id: !input boiler_switch
+                              entity_id: "{{ boiler_switch_target }}"
                           - delay:
                               minutes: "{{ defrost_interval }}"
                           - service: switch.turn_off
                             target:
-                              entity_id: !input boiler_switch
+                              entity_id: "{{ boiler_switch_target }}"
                           - if:
                               - condition: template
                                 value_template: "{{ status_entity not in ['', none] }}"
                             then:
                               - service: input_select.select_option
                                 target:
-                                  entity_id: !input status_entity
+                                  entity_id: "{{ status_target }}"
                                 data:
                                   option: "Idle"
                           - if:
@@ -983,7 +993,7 @@ action:
                             then:
                               - service: input_text.set_value
                                 target:
-                                  entity_id: !input last_reason
+                                  entity_id: "{{ last_reason_target }}"
                                 data:
                                   value: "defrost"
                           - if:
@@ -1002,7 +1012,7 @@ action:
                             then:
                               - service: input_select.select_option
                                 target:
-                                  entity_id: !input boiler_status_entity
+                                  entity_id: "{{ boiler_status_target }}"
                                 data:
                                   option: "Αναμονή"
                           - if:
@@ -1011,7 +1021,7 @@ action:
                             then:
                               - service: input_number.set_value
                                 target:
-                                  entity_id: !input time_left_entity
+                                  entity_id: "{{ time_left_target }}"
                                 data:
                                   value: 0
                           - if:
@@ -1020,7 +1030,7 @@ action:
                             then:
                               - service: input_number.set_value
                                 target:
-                                  entity_id: !input time_left_pct_entity
+                                  entity_id: "{{ time_left_pct_target }}"
                                 data:
                                   value: 0
 
@@ -1102,7 +1112,7 @@ action:
                           then:
                             - service: input_text.set_value
                               target:
-                                entity_id: !input last_reason
+                                entity_id: "{{ last_reason_target }}"
                               data:
                                 value: "sched {{ repeat.index }}: {{ sch_reason }}"
                         - if:
@@ -1111,7 +1121,7 @@ action:
                           then:
                             - service: input_select.select_option
                               target:
-                                entity_id: !input boiler_status_entity
+                                entity_id: "{{ boiler_status_target }}"
                               data:
                                 option: "Αναμονή"
                         - condition: template
@@ -1132,14 +1142,14 @@ action:
                         # --- Heat ---
                         - service: switch.turn_on
                           target:
-                            entity_id: !input boiler_switch
+                            entity_id: "{{ boiler_switch_target }}"
                         - if:
                             - condition: template
                               value_template: "{{ last_on_entity not in ['', none] }}"
                           then:
                             - service: input_datetime.set_datetime
                               target:
-                                entity_id: !input last_on_entity
+                                entity_id: "{{ last_on_target }}"
                               data:
                                 datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
                         - if:
@@ -1148,7 +1158,7 @@ action:
                           then:
                             - service: input_select.select_option
                               target:
-                                entity_id: !input status_entity
+                                entity_id: "{{ status_target }}"
                               data:
                                 option: "Heating"
                         - if:
@@ -1157,7 +1167,7 @@ action:
                           then:
                             - service: input_select.select_option
                               target:
-                                entity_id: !input boiler_status_entity
+                                entity_id: "{{ boiler_status_target }}"
                               data:
                                 option: "Θέρμανση"
                         - variables:
@@ -1170,7 +1180,7 @@ action:
                                 then:
                                   - service: input_number.set_value
                                     target:
-                                      entity_id: !input time_left_entity
+                                      entity_id: "{{ time_left_target }}"
                                     data:
                                       value: >-
                                         {{ [ [ (max_time_val | float(0)) - ((now().timestamp() - heat_start) / 60), 0 ] | max, max_time_val | float(0) ] | min | round(1) }}
@@ -1180,7 +1190,7 @@ action:
                                 then:
                                   - service: input_number.set_value
                                     target:
-                                      entity_id: !input time_left_pct_entity
+                                      entity_id: "{{ time_left_pct_target }}"
                                     data:
                                       value: >-
                                         {{ ([[ (((max_time_val | float(0)) - ((now().timestamp() - heat_start) / 60)) / ([max_time_val | float(0), 1] | max) * 100) | round(0), 100 ] | min, 0] | max) | int }}
@@ -1190,7 +1200,7 @@ action:
                                 then:
                                   - service: input_number.set_value
                                     target:
-                                      entity_id: !input progress_entity
+                                      entity_id: "{{ progress_target }}"
                                     data:
                                       value: >-
                                         {{ ([[ ((states(water_temp_sensor_entity) | float(0)) / (heat_below | float(1)) * 100) | round(0), 100 ] | min, 0] | max) | int }}
@@ -1205,14 +1215,14 @@ action:
                                      or states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}
                         - service: switch.turn_off
                           target:
-                            entity_id: !input boiler_switch
+                            entity_id: "{{ boiler_switch_target }}"
                         - if:
                             - condition: template
                               value_template: "{{ status_entity not in ['', none] }}"
                           then:
                             - service: input_select.select_option
                               target:
-                                entity_id: !input status_entity
+                                entity_id: "{{ status_target }}"
                               data:
                                 option: >-
                                   {{ 'Target reached' if (states(water_temp_sensor_entity) | float(0)) >= (heat_below | float(0)) else 'Idle' }}
@@ -1233,7 +1243,7 @@ action:
                           then:
                             - service: input_select.select_option
                               target:
-                                entity_id: !input boiler_status_entity
+                                entity_id: "{{ boiler_status_target }}"
                               data:
                                 option: >-
                                   {{ 'Έτοιμο' if (states(water_temp_sensor_entity) | float(0)) >= (heat_below | float(0)) else 'Αναμονή' }}
@@ -1243,7 +1253,7 @@ action:
                           then:
                             - service: input_number.set_value
                               target:
-                                entity_id: !input time_left_entity
+                                entity_id: "{{ time_left_target }}"
                               data:
                                 value: 0
                         - if:
@@ -1252,6 +1262,6 @@ action:
                           then:
                             - service: input_number.set_value
                               target:
-                                entity_id: !input time_left_pct_entity
+                                entity_id: "{{ time_left_pct_target }}"
                               data:
                                 value: 0

@@ -7,6 +7,7 @@ Run: python3 tests/test_logic.py
 """
 from __future__ import annotations
 
+import re
 import sys
 from datetime import datetime, time as dtime
 from pathlib import Path
@@ -452,6 +453,44 @@ def test_time_left() -> None:
     check(mins(30, 10) == 20.0, "warm weather max 30, 10 elapsed -> 20 min left")
 
 
+def test_optional_entity_targets() -> None:
+    """Regression: optional inputs with default "" must never reach entity_id raw.
+
+    Home Assistant rejects an empty-string entity_id on save with
+    "expected 'all' or 'none' at ... target.entity_id". Any input whose default
+    is empty must be wrapped so it resolves to `none` when unset.
+    """
+    print("test_optional_entity_targets (no empty entity_id)")
+    raw = BLUEPRINT.read_text(encoding="utf-8")
+    blueprint = yaml.safe_load(raw)
+    inputs = blueprint["blueprint"]["input"]
+    empty_default = {
+        k for k, v in inputs.items() if str(v.get("default", "")).strip() == ""
+    }
+    direct = set(re.findall(r"entity_id:\s*!input\s+([A-Za-z0-9_]+)", raw))
+    dangerous = sorted(direct & empty_default)
+    check(not dangerous, f"no empty-default input used directly as entity_id (found: {dangerous})")
+
+    # The wrappers must exist and be safe (resolve to `none` when empty).
+    for var in (
+        "last_reason_target",
+        "boiler_status_target",
+        "time_left_target",
+        "time_left_pct_target",
+        "boiler_switch_target",
+        "status_target",
+        "progress_target",
+        "last_on_target",
+    ):
+        check(f"{var}:" in raw, f"wrapper variable {var} is defined")
+
+    env = _make_env({}, {}, datetime(2026, 1, 1, 12, 0))
+    check(render(env, "{{ '' if '' not in ['', none] else none }}") == "None",
+          "empty optional resolves to none")
+    check(render(env, "{{ 'x' if 'x' not in ['', none] else none }}") == "x",
+          "set optional passes through")
+
+
 def main() -> int:
     test_presence()
     test_solar()
@@ -465,6 +504,7 @@ def main() -> int:
     test_scenarios()
     test_reason()
     test_time_left()
+    test_optional_entity_targets()
     print()
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")
