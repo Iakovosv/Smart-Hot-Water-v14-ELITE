@@ -20,12 +20,7 @@ card:
   content: |
     {% set st = states('input_select.gsw_hotwater_status') %}
     {% set left = states('input_number.gsw_time_left_minutes') | float(0) %}
-    {% set on = states('input_datetime.water_heater_on') %}
-    {% if on not in ['unknown', 'unavailable', ''] %}
-      {% set secs = [left * 60 - (now().timestamp() - as_timestamp(on)), 0] | max %}
-    {% else %}
-      {% set secs = left * 60 %}
-    {% endif %}
+    {% set secs = [left * 60, 0] | max %}
     {% set label = {'Heating': '🔥 Θέρμανση', 'Boost': '⚡ Boost', 'Defrost': '❄️ Defrost'}.get(st, st) %}
     ## {{ label }}
     **Απομένουν:** {{ '%02d' | format((secs // 60) | int) }}:{{ '%02d' | format((secs % 60) | int) }}

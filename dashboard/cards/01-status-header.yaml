@@ -17,11 +17,13 @@ content: |
        'Boost':          ['⚡', 'Boost']
      }.get(s, ['💧', s if s != 'unknown' else '—']) %}
   # {{ meta[0] }} {{ meta[1] }}
-  **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') }} °C
-  **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') }} °C
-  **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') }} °C
-  **Πρόοδος:** {{ states('input_number.gsw_hotwater_progress') }} % ·
-  **Υπόλοιπο:** {{ states('input_number.gsw_time_left_minutes') }} min
-  {% if states('input_text.gsw_last_reason') not in ['unknown', ''] %}
+  **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') | float(0) | round(1) }} °C
+  **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') | float(0) | round(1) }} °C
+  **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') | float(0) | round(1) }} °C
+  **Πρόοδος:** {{ states('input_number.gsw_hotwater_progress') | float(0) | round(0) }} %
+  {% if states('input_number.gsw_time_left_minutes') not in ['unknown', 'unavailable', ''] %}
+  · **Υπόλοιπο:** {{ states('input_number.gsw_time_left_minutes') | float(0) | round(0) }} min
+  {% endif %}
+  {% if states('input_text.gsw_last_reason') not in ['unknown', 'unavailable', ''] %}
   **Λόγος:** {{ states('input_text.gsw_last_reason') }}
   {% endif %}

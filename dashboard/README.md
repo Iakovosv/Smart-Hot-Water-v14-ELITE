@@ -117,6 +117,48 @@ conditional κάρτες δεν θα έχουν τιμή να δείξουν.
 
 ---
 
+## 🛠️ Troubleshooting
+
+### «Entity not found» / «unknown»
+Οι παρακάτω οντότητες είναι **προαιρετικές** και πρέπει να υπάρχουν για να
+δείξουν τιμή. Δημιούργησέ τις **μία φορά**:
+
+1. Αντίγραψε το [`helpers/gsw_hotwater.yaml`](../helpers/gsw_hotwater.yaml) στο
+   `<config>/packages/gsw_hotwater.yaml`.
+2. Στο `configuration.yaml` πρόσθεσε:
+   ```yaml
+   homeassistant:
+     packages: !include_dir_named packages
+   ```
+3. Developer Tools → YAML → **Check configuration** → **Reload all**.
+
+Ή φτιάξ’ τες χειροκίνητα: Settings → Devices & Services → **Helpers**.
+Οι οντότητες-κλειδιά:
+
+| Helper | Τύπος | Γιατί |
+|---|---|---|
+| `gsw_time_left_minutes` | input_number (0-180) | Αντίστροφη μέτρηση |
+| `gsw_time_left_pct` | input_number (0-100) | Μπάρα υπολοίπου |
+| `gsw_last_reason` | input_text | Λόγος τελευταίας ενέργειας |
+| `gsw_solar_skip` | input_boolean | Παράλειψη ηλιακού |
+| `gsw_boiler_status` | input_select (Θέρμανση/Αναμονή/Έτοιμο) | Ελληνική κατάσταση |
+
+### Το `gsw_time_left_minutes` δείχνει `unknown`
+Φυσιολογικό **πριν** τρέξει θέρμανση: ο αυτοματισμός το γράφει μόνο όταν
+θερμαίνει. Επίσης, στη φόρμα του blueprint πρέπει να έχεις βάλει
+**Time left minutes** → `input_number.gsw_time_left_minutes`.
+
+### «Template error: as_timestamp got invalid input '00:00:00'»
+Το διορθώσαμε. Οι κάρτες **δεν** χρησιμοποιούν πλέον `as_timestamp` — δείχνουν
+το υπόλοιπο που ήδη μετρά ο αυτοματισμός. Αν το είδες σε **παλιά** έκδοση,
+ξανα-επικόλλησε τις κάρτες από το `cards/`.
+
+### Το «Έξυπνος έλεγχος (master)» / ρελέ δείχνουν Off
+Αυτό είναι **σωστό** όταν δεν θερμαίνει. Ο master πρέπει να είναι **On** για να
+δουλέψει ο αυτοματισμός — άναψέ τον από την κάρτα 03.
+
+---
+
 ## Τι κάνει το κάθε στοιχείο (οντότητες)
 
 | Οντότητα | Σημασία | Πού εμφανίζεται |
@@ -126,7 +168,7 @@ conditional κάρτες δεν θα έχουν τιμή να δείξουν.
 | `input_number.gsw_hotwater_progress` | Πρόοδος θέρμανσης % | 01, 02, 05, 06 |
 | `input_number.gsw_time_left_minutes` | Υπόλοιπο χρόνου (min) * | 01, 06, 11, 12, 13 |
 | `input_number.gsw_time_left_pct` | Υπόλοιπο χρόνου % * | 06, 11, 13 |
-| `input_datetime.water_heater_on` | Τελευταία ενεργοποίηση | 06, 11, 12, 13 |
+| `input_datetime.water_heater_on` | Τελευταία ενεργοποίηση | 06 |
 | `input_text.gsw_last_reason` | Λόγος τελευταίας ενέργειας * | 01, 06 |
 | `sensor.temperature_esp_temperature_esp` | Νερό χρήσης °C | 01, 02, 05, 08 |
 | `sensor.temperature_esp_outside_temperature` | Συλλέκτης ηλιακού °C | 01, 02, 05, 08 |
