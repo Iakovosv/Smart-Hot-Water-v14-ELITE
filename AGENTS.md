@@ -59,6 +59,12 @@ Sanity-check the harness by adding a bogus domain; it must report
   `condition.async_validate_condition_config` is the *wrong* validator for them.
 - The reverse countdown is driven by `input_number.gsw_time_left_minutes`, which
   the blueprint already counts down; cards just format it as mm:ss.
+- The integration **never** writes `automations.yaml`; it only refreshes the
+  blueprint *definition*. Blueprint input values live in `automations.yaml` and
+  survive updates (verified against the real HA engine).
+- `installer.install_blueprints` must write **atomically** (temp + `os.replace`)
+  and only when content changed. A plain copy over a live file can be read
+  half-written by HA at startup, making an automation show empty/default inputs.
 - Optional helper entities (`gsw_time_left_minutes`, `gsw_time_left_pct`,
   `gsw_last_reason`, `gsw_solar_skip`, `gsw_boiler_status`) live in
   `helpers/gsw_hotwater.yaml`; without them the UI shows `unknown` / "Entity not found".

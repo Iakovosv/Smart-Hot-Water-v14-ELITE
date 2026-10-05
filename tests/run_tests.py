@@ -167,6 +167,27 @@ def test_installer() -> None:
               "second install is a no-op (same version)")
         check(installer.read_version() != "0", "version is read from version.json")
 
+        # force=True must NOT rewrite identical files (mtime stays put)
+        target = target_dir / BLUEPRINTS[0]
+        before = target.stat().st_mtime_ns
+        r3 = installer.install_blueprints(tmp, force=True)
+        check(r3.get("ok") and r3.get("changed") is False and r3.get("updated") == [],
+              "force=True skips identical files (no needless rewrite)")
+        check(target.stat().st_mtime_ns == before,
+              "identical blueprint file is left untouched (mtime unchanged)")
+
+        # A changed file is replaced atomically and the old one is backed up
+        target.write_text("stale content\n", encoding="utf-8")
+        r4 = installer.install_blueprints(tmp, force=True)
+        check(r4.get("changed") is True and BLUEPRINTS[0] in r4.get("updated", []),
+              "changed blueprint is reported as updated")
+        check(target.read_text(encoding="utf-8") == (BLUEPRINT_DIR / BLUEPRINTS[0]).read_text(encoding="utf-8"),
+              "changed blueprint content is refreshed")
+        check((target_dir / (BLUEPRINTS[0] + ".bak")).exists(),
+              "previous blueprint backed up to .bak")
+        leftovers = [p.name for p in target_dir.iterdir() if p.name.endswith(".tmp")]
+        check(not leftovers, f"no temp files left behind (found {leftovers})")
+
 
 def test_manifest() -> None:
     print("test_manifest")

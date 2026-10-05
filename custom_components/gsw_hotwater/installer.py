@@ -7,7 +7,8 @@ configuration directory and tracks the installed version.
 from __future__ import annotations
 
 import json
-import shutil
+import os
+import tempfile
 from pathlib import Path
 
 DOMAIN = "gsw_hotwater"
@@ -36,11 +37,35 @@ def blueprint_source(name: str) -> Path:
     return _SOURCE_DIR / name
 
 
+def _write_atomic(path: Path, text: str) -> None:
+    """Write text to path atomically (temp file in the same dir + os.replace).
+
+    A plain copy over a live file can be observed half-written by a concurrent
+    reader; Home Assistant reads blueprints at startup, so a torn file can make
+    an automation's blueprint fail to load.
+    """
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def install_blueprints(config_dir: str | Path, force: bool = True) -> dict:
     """Copy all bundled blueprints into <config_dir>/blueprints/automation/gsw_hotwater/.
 
-    Returns a dict describing the result. Never raises for the normal
-    "already installed, same version" case.
+    Files whose content is already identical are left untouched (no needless
+    rewrite of a file Home Assistant may be reading). Changed files are backed
+    up to ``<name>.bak`` and written atomically. Returns a dict describing the
+    result; never raises for the normal "already up to date" case.
     """
     config_dir = Path(config_dir)
     target_dir = config_dir / BLUEPRINT_RELATIVE_DIR
@@ -63,12 +88,25 @@ def install_blueprints(config_dir: str | Path, force: bool = True) -> dict:
                 "path": str(target_dir), "files": list(BLUEPRINTS)}
 
     target_dir.mkdir(parents=True, exist_ok=True)
+    changed: list[str] = []
     for name in BLUEPRINTS:
-        shutil.copyfile(blueprint_source(name), target_dir / name)
-    version_file.write_text(json.dumps({"version": version}), encoding="utf-8")
+        source_text = blueprint_source(name).read_text(encoding="utf-8")
+        target = target_dir / name
+        current = target.read_text(encoding="utf-8") if target.exists() else None
+        if current == source_text:
+            continue
+        if current is not None:
+            _write_atomic(target.with_suffix(target.suffix + ".bak"), current)
+        _write_atomic(target, source_text)
+        changed.append(name)
 
-    return {"ok": True, "changed": True, "version": version,
-            "path": str(target_dir), "files": list(BLUEPRINTS)}
+    version_text = json.dumps({"version": version})
+    current_version_text = version_file.read_text(encoding="utf-8") if version_file.exists() else None
+    if current_version_text != version_text:
+        _write_atomic(version_file, version_text)
+
+    return {"ok": True, "changed": bool(changed), "version": version,
+            "path": str(target_dir), "files": list(BLUEPRINTS), "updated": changed}
 
 
 # Backwards-compatible single-file helper.
