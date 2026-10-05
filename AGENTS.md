@@ -67,5 +67,5 @@ Sanity-check the harness by adding a bogus domain; it must report
 1. Bump `custom_components/gsw_hotwater/manifest.json` + `version.json`.
 2. Add a changelog entry at the top of the root `README.md`.
 3. Run the tests above.
-4. Commit (include `Co-authored-by: openhands <openhands@all-hands.dev>`), push.
+4. Commit and push (the repo forbids agent-identity strings in tracked files).
 5. Create a GitHub release with `curl` against the releases API.
