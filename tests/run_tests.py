@@ -763,6 +763,112 @@ def test_conditional_conditions() -> None:
     check(found >= 3, f"conditional cards present ({found})")
 
 
+def test_boost_guard_end_to_end() -> None:
+    """Real HA engine: the boost branch must not turn the relay on when hot.
+
+    Substitutes the blueprint exactly as HA does, then runs the real action
+    chain for the boost trigger with mocked services and asserts whether
+    switch.turn_on was called. Skipped (ok) when HA is not installed.
+    """
+    print("test_boost_guard_end_to_end (real HA engine, boost already-hot guard)")
+    try:
+        import asyncio  # noqa: PLC0415
+
+        from homeassistant.components.automation import config as ac  # noqa: PLC0415
+        from homeassistant.components.blueprint import models  # noqa: PLC0415
+        from homeassistant.core import Context, HomeAssistant  # noqa: PLC0415
+        from homeassistant.helpers import config_validation as cv  # noqa: PLC0415
+        from homeassistant.helpers.script import Script  # noqa: PLC0415
+        from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
+    except ImportError:
+        print("  ok   - Home Assistant not installed, skipped")
+        return
+
+    path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
+
+    async def run() -> list[str]:
+        problems: list[str] = []
+        hass = HomeAssistant("")
+        await hass.async_start()
+        cv._hass.hass = hass
+        bp = models.Blueprint(yloader.load_yaml(path), path=path,
+                              schema=ac.AUTOMATION_BLUEPRINT_SCHEMA)
+        inputs = {}
+        for key, spec in bp.inputs.items():
+            default = spec.get("default", "") if isinstance(spec, dict) else ""
+            inputs[key] = SAMPLE_INPUTS.get(key, default)
+        cfg = ac.PLATFORM_SCHEMA(
+            models.BlueprintInputs(
+                bp, {"use_blueprint": {"path": path, "input": inputs}}
+            ).async_substitute())
+
+        calls: list[str] = []
+        hass.services.async_register("switch", "turn_on",
+                                     lambda call: calls.append("on"))
+        hass.services.async_register("switch", "turn_off",
+                                     lambda call: calls.append("off"))
+        for dom, svc in (("input_select", "select_option"),
+                         ("input_number", "set_value"),
+                         ("input_datetime", "set_datetime"),
+                         ("input_text", "set_value"),
+                         ("notify", "mobile")):
+            hass.services.async_register(dom, svc, lambda call: None)
+
+        async def case(water, target, expect_on, sensor_ok=True,
+                       check_on=False, boiler="off") -> None:
+            calls.clear()
+            states = {
+                "input_boolean.gsw_smart_hotwater_enable": "on",
+                "switch.boiler": boiler,
+                "sensor.water": "unknown" if not sensor_ok else str(water),
+                "input_number.gsw_boost_target_temp": str(target),
+                "input_number.gsw_boost_minutes": "30",
+                "input_boolean.water_temperature_check":
+                    "on" if check_on else "off",
+                "sensor.out": "15",
+                "input_select.status": "Idle",
+                "input_select.boiler": "Αναμονή",
+            }
+            for entity, state in states.items():
+                hass.states.async_set(entity, state)
+            await hass.async_block_till_done()
+            script = Script(hass, cfg["actions"], "probe", "automation",
+                            variables=cfg["variables"])
+            task = asyncio.create_task(script.async_run(
+                run_variables={"trigger": {"id": "boost"}},
+                context=Context()))
+            await asyncio.sleep(1.5)
+            turned_on = "on" in calls
+            if turned_on != expect_on:
+                problems.append(
+                    f"water={water} target={target} sensor_ok={sensor_ok} "
+                    f"check={check_on} boiler={boiler}: turn_on={turned_on} "
+                    f"expected={expect_on}")
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            await hass.async_block_till_done()
+
+        await case(55, 55, False)            # equal to target -> no heat
+        await case(60, 55, False)            # above target  -> no heat
+        await case(54.9, 55, True)           # just below    -> heat
+        await case(40, 55, True)             # below         -> heat
+        await case(80, 55, False)            # above safety cap -> no heat
+        await case(40, 55, False, sensor_ok=False)   # no sensor -> no heat
+        await case(40, 55, False, check_on=True)     # blocked   -> no heat
+        await case(40, 55, False, boiler="on")       # already on -> no heat
+        await hass.async_stop()
+        return problems
+
+    problems = asyncio.run(run())
+    check(not problems,
+          "boost never turns the relay on when already hot / blocked (8 cases)")
+    for p in problems:
+        print(f"        {p}")
+
+
 def main() -> int:
     for name in BLUEPRINTS:
         print(f"\n===== Validating {name} =====")
@@ -776,6 +882,7 @@ def main() -> int:
     test_manifest()
     test_no_forbidden_mentions()
     test_ha_blueprint_save()
+    test_boost_guard_end_to_end()
     test_dashboard_files()
     test_helper_coverage()
     test_gauge_and_rounding()

@@ -781,6 +781,40 @@ action:
                     value_template: "{{ max_water_temp_val | float(0) > 0 and (states(water_temp_sensor_entity) | float(0)) >= (max_water_temp_val | float(0)) }}"
                 then:
                   - stop: "Water already at/above safety max"
+              # Already-hot guard: if the water is already at/above the boost
+              # target, never turn the relay on (avoid a needless on/off blip).
+              - if:
+                  - condition: template
+                    value_template: "{{ (states(water_temp_sensor_entity) | float(0)) >= (boost_target | float(0)) }}"
+                then:
+                  - if:
+                      - condition: template
+                        value_template: "{{ status_entity not in ['', none] }}"
+                    then:
+                      - service: input_select.select_option
+                        target:
+                          entity_id: "{{ status_target }}"
+                        data:
+                          option: "Target reached"
+                  - if:
+                      - condition: template
+                        value_template: "{{ boiler_status_helper not in ['', none] }}"
+                    then:
+                      - service: input_select.select_option
+                        target:
+                          entity_id: "{{ boiler_status_target }}"
+                        data:
+                          option: "Έτοιμο"
+                  - if:
+                      - condition: template
+                        value_template: "{{ last_reason_entity not in ['', none] }}"
+                    then:
+                      - service: input_text.set_value
+                        target:
+                          entity_id: "{{ last_reason_target }}"
+                        data:
+                          value: "already_hot_boost"
+                  - stop: "Water already at/above boost target"
               - service: switch.turn_on
                 target:
                   entity_id: "{{ boiler_switch_target }}"

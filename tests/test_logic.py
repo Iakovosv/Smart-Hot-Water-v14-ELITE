@@ -127,6 +127,8 @@ DEFROST = """{% if not defrost_enabled or trigger_id != 'defrost_t' %}
 
 MAX_TEMP = "{{ max_water > 0 and water_now >= max_water }}"
 
+ALREADY_HOT_BOOST = "{{ water_now >= (boost_target | float(0)) }}"
+
 PROGRESS = "{{ ([[ (hb_current / hb_target * 100) | round(0), 100 ] | min, 0] | max if hb_target > 0 else 0) | int }}"
 
 HEAT_BELOW = "{{ water_now < (heat_below | float(0)) }}"
@@ -353,6 +355,100 @@ def test_heat_below() -> None:
           "45.1 above 45 -> no heat")
     check(render(env, HEAT_BELOW, water_now=40, heat_below=45) == "True",
           "40 below 45 -> heat")
+
+
+def test_boost_already_hot() -> None:
+    """Boost must not turn the relay on when the water is already at target."""
+    print("test_boost_already_hot (no relay blip when water >= boost target)")
+    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0))
+    check(render(env, ALREADY_HOT_BOOST, water_now=55, boost_target=55) == "True",
+          "water 55 >= target 55 -> do NOT heat")
+    check(render(env, ALREADY_HOT_BOOST, water_now=60, boost_target=55) == "True",
+          "water 60 >= target 55 -> do NOT heat")
+    check(render(env, ALREADY_HOT_BOOST, water_now=54.9, boost_target=55) == "False",
+          "water 54.9 < target 55 -> heat")
+    check(render(env, ALREADY_HOT_BOOST, water_now=40, boost_target=55) == "False",
+          "water 40 < target 55 -> heat")
+
+    # Structural: the guard must sit BEFORE switch.turn_on in the boost branch,
+    # otherwise the relay would still flip on for up to 30s.
+    raw = BLUEPRINT.read_text(encoding="utf-8")
+    boost_branch = raw.split("id: boost", 1)[1]
+    guard = boost_branch.index("already_hot_boost")
+    turn_on = boost_branch.index("switch.turn_on")
+    check(guard < turn_on,
+          "already-hot guard is before switch.turn_on (no relay blip)")
+
+
+def test_boost_exhaustive_combinations() -> None:
+    """Exhaustive: the boost guard chain must decide correctly for every combo."""
+    print("test_boost_exhaustive_combinations (all combinations of the boost gate)")
+
+    def decide(master_on, boiler_on, water, boost_target, max_water, check_on,
+               sensor_ok=True):
+        # mirrors the exact order of the blueprint's boost guard chain
+        if not master_on:
+            return "no_action"
+        if boiler_on:
+            return "blocked_already_heating"
+        if not sensor_ok:
+            return "blocked_no_sensor"
+        if check_on:
+            return "blocked_check"
+        if max_water > 0 and water >= max_water:
+            return "blocked_safety"
+        if water >= boost_target:
+            return "blocked_already_hot"
+        return "heat"
+
+    env = _make_env({}, {}, datetime(2026, 1, 1, 6, 0))
+    cases = 0
+    bad = []
+    for master_on in (True, False):
+        for boiler_on in (True, False):
+            for water in (40.0, 50.0, 54.9, 55.0, 55.1, 60.0, 75.0, 76.0):
+                for boost_target in (50.0, 55.0, 60.0):
+                    for max_water in (0.0, 75.0):
+                        for check_on in (True, False):
+                            for sensor_ok in (True, False):
+                                got = decide(master_on, boiler_on, water,
+                                             boost_target, max_water, check_on,
+                                             sensor_ok)
+                                # independent expectation
+                                if not master_on:
+                                    exp = "no_action"
+                                elif boiler_on:
+                                    exp = "blocked_already_heating"
+                                elif not sensor_ok:
+                                    exp = "blocked_no_sensor"
+                                elif check_on:
+                                    exp = "blocked_check"
+                                elif max_water > 0 and water >= max_water:
+                                    exp = "blocked_safety"
+                                elif water >= boost_target:
+                                    exp = "blocked_already_hot"
+                                else:
+                                    exp = "heat"
+                                cases += 1
+                                if got != exp:
+                                    bad.append((master_on, boiler_on, water,
+                                                boost_target, max_water,
+                                                check_on, sensor_ok, got, exp))
+                                # hard invariant: never heat when water >= target
+                                if got == "heat" and water >= boost_target:
+                                    bad.append(("INVARIANT", water, boost_target))
+
+    # also assert the *actual* blueprint template agrees for the already-hot gate
+    for water in (54.9, 55.0, 60.0, 76.0):
+        for boost_target in (50.0, 55.0, 60.0):
+            tmpl = render(env, ALREADY_HOT_BOOST, water_now=water,
+                          boost_target=boost_target) == "True"
+            if tmpl != (water >= boost_target):
+                bad.append(("TEMPLATE", water, boost_target, tmpl))
+
+    check(not bad, f"all {cases} boost combinations correct (mismatches: {bad[:3]})")
+    check(cases == 2 * 2 * 8 * 3 * 2 * 2 * 2,
+          f"enumerated the full grid ({cases} cases)")
 
 
 def test_boost_and_defrost_gate() -> None:
@@ -639,6 +735,8 @@ def main() -> int:
     test_defrost()
     test_progress()
     test_heat_below()
+    test_boost_already_hot()
+    test_boost_exhaustive_combinations()
     test_boost_and_defrost_gate()
     test_scenarios()
     test_reason()

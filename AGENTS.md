@@ -69,10 +69,11 @@ Sanity-check the harness by adding a bogus domain; it must report
   Verified against `homeassistant/helpers/script.py` and empirically (a
   condition set true 1s into a 5s delay still waited the full 5s). The boost and
   scheduled loops poll every 30s, so heating stops within **≤30s** of the target
-  being reached or the max time elapsing - not instantly. Boost has no
-  pre-check against the boost target: pressing it when the water is already
-  above target turns the relay on, then off ≤30s later (the safety cap
-  `max_water_temp` *is* pre-checked).
+  being reached or the max time elapsing - not instantly. Boost now has an
+  **already-hot pre-check** (v1.12.7): if the water is at/above the boost target
+  it does not turn the relay on at all (status -> `Target reached`, reason
+  `already_hot_boost`); the safety cap `max_water_temp` is pre-checked too.
+  The scheduled path keeps its `< heat_below` guard.
 - The integration **never** writes `automations.yaml`; it only refreshes the
   blueprint *definition*. Blueprint input values live in `automations.yaml` and
   survive updates (verified against the real HA engine).
