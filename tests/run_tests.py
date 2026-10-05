@@ -570,9 +570,13 @@ def test_gauge_and_rounding() -> None:
         sev = g["severity"]
         check(set(sev) == {"green", "yellow", "red"},
               f"gauge severity has green/yellow/red ({sorted(sev)})")
-        check(sev["red"] > sev["yellow"] > sev["green"],
-              f"gauge {g.get('entity')}: red>yellow>green so hot=red "
-              f"({sev['green']}/{sev['yellow']}/{sev['red']})")
+        # Temperature gauges read as a thermometer: hot = red (red highest).
+        # A progress gauge is the opposite (green = nearly done), so only
+        # enforce the ordering for temperature sensors.
+        if "temperature" in str(g.get("entity", "")):
+            check(sev["red"] > sev["yellow"] > sev["green"],
+                  f"gauge {g.get('entity')}: red>yellow>green so hot=red "
+                  f"({sev['green']}/{sev['yellow']}/{sev['red']})")
     water_sev = [g["severity"] for g in gauges if g.get("entity") == water]
     check(any(s["red"] == 50 for s in water_sev),
           "water gauge turns red at 50 C")

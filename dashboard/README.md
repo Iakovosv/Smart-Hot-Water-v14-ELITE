@@ -78,6 +78,7 @@ Edit → **+ Add card** → **Manual** → επικόλλησε το περιε�
 | 11 | `11-conditional-heating.yaml` | conditional | **Εμφανίζεται μόνο όταν θερμαίνει** — live αντίστροφη μέτρηση mm:ss + μπάρα |
 | 12 | `12-conditional-countdown.yaml` | conditional | Countdown ανά κατάσταση (Θέρμανση/Boost/Defrost) |
 | 13 | `13-conditional-time-bar.yaml` | conditional | Μπάρα που **γεμίζει ανάποδα** + μεγάλο mm:ss |
+| 14 | `14-progress-status-boost.yaml` | vertical-stack | **Όμορφη** εκδοχή: κεφαλίδα κατάστασης (εικονίδιο+χρώμα) + χρωματικό gauge προόδου + tiles (ρελέ/master/νερό/μπλοκάρισμα) + Boost |
 
 > **Σημείωση:** τα `02` και `05` δείχνουν τα ίδια δεδομένα με διαφορετικό στυλ.
 > Χρησιμοποίησε **ένα** από τα δύο.
