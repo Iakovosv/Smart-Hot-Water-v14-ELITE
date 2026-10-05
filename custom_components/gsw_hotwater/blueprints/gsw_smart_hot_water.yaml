@@ -765,21 +765,57 @@ action:
                   - condition: template
                     value_template: "{{ is_state(boiler_switch_entity, 'on') }}"
                 then:
+                  - if:
+                      - condition: template
+                        value_template: "{{ last_reason_entity not in ['', none] }}"
+                    then:
+                      - service: input_text.set_value
+                        target:
+                          entity_id: "{{ last_reason_target }}"
+                        data:
+                          value: "blocked_already_on"
                   - stop: "Boiler already heating (or already on)"
               - if:
                   - condition: template
                     value_template: "{{ states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}"
                 then:
+                  - if:
+                      - condition: template
+                        value_template: "{{ last_reason_entity not in ['', none] }}"
+                    then:
+                      - service: input_text.set_value
+                        target:
+                          entity_id: "{{ last_reason_target }}"
+                        data:
+                          value: "blocked_no_sensor"
                   - stop: "Water temperature sensor unavailable"
               - if:
                   - condition: template
                     value_template: "{{ is_state(water_temp_check_entity, 'on') }}"
                 then:
+                  - if:
+                      - condition: template
+                        value_template: "{{ last_reason_entity not in ['', none] }}"
+                    then:
+                      - service: input_text.set_value
+                        target:
+                          entity_id: "{{ last_reason_target }}"
+                        data:
+                          value: "blocked_check"
                   - stop: "Heating blocked by water temperature check"
               - if:
                   - condition: template
                     value_template: "{{ max_water_temp_val | float(0) > 0 and (states(water_temp_sensor_entity) | float(0)) >= (max_water_temp_val | float(0)) }}"
                 then:
+                  - if:
+                      - condition: template
+                        value_template: "{{ last_reason_entity not in ['', none] }}"
+                    then:
+                      - service: input_text.set_value
+                        target:
+                          entity_id: "{{ last_reason_target }}"
+                        data:
+                          value: "blocked_safety_max"
                   - stop: "Water already at/above safety max"
               # Already-hot guard: if the water is already at/above the boost
               # target, never turn the relay on (avoid a needless on/off blip).

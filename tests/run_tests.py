@@ -803,6 +803,7 @@ def test_boost_guard_end_to_end() -> None:
             ).async_substitute())
 
         calls: list[str] = []
+        reasons: list[str] = []
         hass.services.async_register("switch", "turn_on",
                                      lambda call: calls.append("on"))
         hass.services.async_register("switch", "turn_off",
@@ -810,13 +811,17 @@ def test_boost_guard_end_to_end() -> None:
         for dom, svc in (("input_select", "select_option"),
                          ("input_number", "set_value"),
                          ("input_datetime", "set_datetime"),
-                         ("input_text", "set_value"),
                          ("notify", "mobile")):
             hass.services.async_register(dom, svc, lambda call: None)
+        hass.services.async_register(
+            "input_text", "set_value",
+            lambda call: reasons.append(call.data.get("value")))
 
         async def case(water, target, expect_on, sensor_ok=True,
-                       check_on=False, boiler="off") -> None:
+                       check_on=False, boiler="off",
+                       expect_reason=None) -> None:
             calls.clear()
+            reasons.clear()
             states = {
                 "input_boolean.gsw_smart_hotwater_enable": "on",
                 "switch.boiler": boiler,
@@ -844,6 +849,9 @@ def test_boost_guard_end_to_end() -> None:
                     f"water={water} target={target} sensor_ok={sensor_ok} "
                     f"check={check_on} boiler={boiler}: turn_on={turned_on} "
                     f"expected={expect_on}")
+            if expect_reason is not None and expect_reason not in reasons:
+                problems.append(
+                    f"expected reason {expect_reason!r}, got {reasons}")
             task.cancel()
             try:
                 await task
@@ -851,14 +859,16 @@ def test_boost_guard_end_to_end() -> None:
                 pass
             await hass.async_block_till_done()
 
-        await case(55, 55, False)            # equal to target -> no heat
-        await case(60, 55, False)            # above target  -> no heat
-        await case(54.9, 55, True)           # just below    -> heat
-        await case(40, 55, True)             # below         -> heat
-        await case(80, 55, False)            # above safety cap -> no heat
-        await case(40, 55, False, sensor_ok=False)   # no sensor -> no heat
-        await case(40, 55, False, check_on=True)     # blocked   -> no heat
-        await case(40, 55, False, boiler="on")       # already on -> no heat
+        await case(55, 55, False, expect_reason="already_hot_boost")
+        await case(60, 55, False, expect_reason="already_hot_boost")
+        await case(54.9, 55, True)
+        await case(40, 55, True)
+        await case(80, 55, False, expect_reason="blocked_safety_max")
+        await case(40, 55, False, sensor_ok=False,
+                   expect_reason="blocked_no_sensor")
+        await case(40, 55, False, check_on=True, expect_reason="blocked_check")
+        await case(40, 55, False, boiler="on",
+                   expect_reason="blocked_already_on")
         await hass.async_stop()
         return problems
 
