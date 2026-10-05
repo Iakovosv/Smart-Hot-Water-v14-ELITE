@@ -322,29 +322,36 @@ panel/συλλέκτη** — ώστε να **μην ανάβει** όταν ο �
 
 ## 📊 Κάρτα / Dashboard
 
-Έτοιμα Lovelace αρχεία στο φάκελο [`dashboard/`](dashboard/):
+Έτοιμα Lovelace αρχεία στο φάκελο [`dashboard/`](dashboard/) — αναλυτικός
+οδηγός: [`dashboard/README.md`](dashboard/README.md).
 
 | Αρχείο | Τι είναι |
 |---|---|
-| [`gsw_hotwater_dashboard.yaml`](dashboard/gsw_hotwater_dashboard.yaml) | **Πλήρες dashboard** (2 views: *Κατάσταση* + *Ρυθμίσεις*) με gauges, χειριστήρια, boost, ιστορικό, κατανάλωση και αναφορά **όλων** των παραμέτρων. |
-| [`gsw_hotwater_card.yaml`](dashboard/gsw_hotwater_card.yaml) | **Μία compact κάρτα** (vertical-stack) για να την ρίξεις σε υπάρχον dashboard. |
+| [`dashboard/gsw_hotwater_dashboard.yaml`](dashboard/gsw_hotwater_dashboard.yaml) | **Πλήρες dashboard** (2 views: *Κατάσταση* + *Ρυθμίσεις*) με gauges, χειριστήρια, boost, ιστορικό, κατανάλωση και αναφορά **όλων** των παραμέτρων. |
+| [`dashboard/gsw_hotwater_card.yaml`](dashboard/gsw_hotwater_card.yaml) | **Μία κάθετη κάρτα** (vertical-stack) για να την ρίξεις σε υπάρχον dashboard. |
+| [`dashboard/cards/`](dashboard/cards/) | **10 ξεχωριστές κάρτες** — βάλε όποια θέλεις, με όποια σειρά θέλεις. |
 
 **Μόνο built-in κάρτες** — δεν χρειάζεται HACS frontend.
+
+### Ξεχωριστές κάρτες (`dashboard/cards/`)
+| # | Αρχείο | Τι δείχνει |
+|---|---|---|
+| 01 | `01-status-header.yaml` | Επικεφαλίδα κατάστασης (ελληνικά + emoji) |
+| 02 | `02-gauges.yaml` | Ρολόγια: νερό / συλλέκτης / πρόοδος |
+| 03 | `03-controls.yaml` | Ρελέ, master, μπλοκάρισμα, solar skip |
+| 04 | `04-boost.yaml` | Κουμπί + στόχος + λεπτά + λειτουργία boost |
+| 05 | `05-tiles-temps.yaml` | Ίδια με 02 αλλά σε tiles (κινητό) |
+| 06 | `06-helpers.yaml` | Όλες οι βοηθητικές οντότητες |
+| 07 | `07-consumption.yaml` | Ισχύς / cloud / Pi / uptime |
+| 08 | `08-history.yaml` | Γράφημα θερμοκρασιών 24h |
+| 09 | `09-consumption-graph.yaml` | Στατιστικά κατανάλωσης |
+| 10 | `10-automations.yaml` | Κατάσταση των 2 αυτοματισμών |
 
 ### Εγκατάσταση
 1. Settings → **Dashboards** → **+ Add dashboard** → άνοιξέ το → **Edit** (μολύβι).
 2. Πάνω δεξιά **⋮** → **Raw configuration editor**.
 3. Επικόλλησε **όλο** το περιεχόμενο του `gsw_hotwater_dashboard.yaml` → **Save**.
-4. Για τη μικρή κάρτα: Edit → **+ Add card** → **Manual** → επικόλλησε το `gsw_hotwater_card.yaml`.
-
-### Τι περιλαμβάνει (όλες οι παράμετροι)
-- **Ζωντανή κατάσταση**: κατάσταση λέβητα, νερό χρήσης, συλλέκτης, εξωτερική, πρόοδος, υπόλοιπο χρόνου, λόγος.
-- **Χειριστήρια**: ρελέ θερμοσίφωνα, master enable, μπλοκάρισμα θέρμανσης, solar skip.
-- **Boost**: κουμπί, στόχος, λεπτά, λειτουργία.
-- **Βοηθητικές**: `input_select` κατάστασης (EN/EL), πρόοδος, χρόνος, τελευταία ενεργοποίηση, λόγος.
-- **Κατανάλωση/σύστημα**: ισχύς, cloud, τροφοδοσία Pi, uptime.
-- **Ιστορικό**: γράφημα 24 ωρών + στατιστικά κατανάλωσης.
-- **Αναφορά παραμέτρων**: `cold_threshold`, `target_temp_cold/warm`, `max_water_temp`, `solar_*`, `max_time_*`, defrost, `require_presence`, χρήστες/ζώνες, ειδοποιήσεις.
+4. Για κάρτα: Edit → **+ Add card** → **Manual** → επικόλλησε το YAML.
 
 > Τα entity ids είναι τα δικά σου. Αν κάποιο διαφέρει, άλλαξέ το στο YAML.
 > Τα `gsw_time_left_minutes`, `gsw_time_left_pct`, `gsw_last_reason` είναι
@@ -420,6 +427,15 @@ off → **όχι «ήδη ζεστό»** → όχι αναμμένο → ανά�
 ---
 
 ## Ιστορικό εκδόσεων / Changelog
+### v1.11.1
+- **10 ξεχωριστές κάρτες** στο `dashboard/cards/` — κάθε μία ανεξάρτητη,
+  copy-paste σε όποια σειρά θέλεις (κατάσταση, gauges, χειριστήρια, boost,
+  tiles, helpers, κατανάλωση, ιστορικό, στατιστικά, αυτοματισμοί).
+- **Αναλυτικό README** στο `dashboard/README.md`: τι κάνει κάθε αρχείο, κάθε
+  οντότητα, χρώματα καταστάσεων και οδηγίες προσαρμογής.
+- Το κεντρικό README παραπέμπει πλέον σε όλα τα dashboard αρχεία.
+- Το test suite ελέγχει **και** τις ξεχωριστές κάρτες (12 YAML συνολικά).
+
 ### v1.11.0
 - **Νέο: έτοιμο dashboard + compact κάρτα** στο φάκελο `dashboard/`:
   - `gsw_hotwater_dashboard.yaml` — 2 views (*Κατάσταση* / *Ρυθμίσεις*) με
@@ -508,8 +524,14 @@ brand/                   # same assets at repo root (for HACS / README)
 tools/make_icon.py       # regenerates all brand assets (Pillow)
 blueprints/automation/gsw_hotwater/   # installed location (created at runtime)
 helpers/gsw_hotwater.yaml             # optional helper entities (package)
+dashboard/
+  README.md                          # οδηγός dashboard & καρτών
+  gsw_hotwater_dashboard.yaml        # πλήρες dashboard (2 views)
+  gsw_hotwater_card.yaml             # μία κάθετη κάρτα (vertical-stack)
+  cards/                             # 10 ξεχωριστές κάρτες (copy-paste)
 tests/
   run_tests.py           # structure / inputs / jinja / installer / manifest
+                         #   + real HA save validation + dashboard checks
   test_logic.py          # functional logic simulation
 ```
 

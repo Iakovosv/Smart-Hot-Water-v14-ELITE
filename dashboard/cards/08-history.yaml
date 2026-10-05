@@ -1,0 +1,15 @@
+# --------------------------------------------------------------------------
+#  GSW Smart Hot Water — Κάρτα 08: Ιστορικό 24 ωρών
+#  Δείχνει: γράφημα θερμοκρασιών νερού / συλλέκτη / εξωτερικής.
+# --------------------------------------------------------------------------
+type: history-graph
+title: Ιστορικό 24 ωρών
+hours_to_show: 24
+refresh_interval: 60
+entities:
+  - entity: sensor.temperature_esp_temperature_esp
+    name: Νερό χρήσης
+  - entity: sensor.temperature_esp_outside_temperature
+    name: Συλλέκτης
+  - entity: sensor.gw2000a_outdoor_temperature
+    name: Έξω

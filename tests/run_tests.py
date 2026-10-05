@@ -348,17 +348,18 @@ def test_dashboard_files() -> None:
     """The shipped dashboard/card YAML must parse and use only built-in cards."""
     print("test_dashboard_files")
     dash_dir = ROOT / "dashboard"
-    files = sorted(dash_dir.glob("*.yaml"))
+    files = sorted(dash_dir.rglob("*.yaml"))
     check(bool(files), "dashboard/ has YAML files")
     env = Environment()
     for path in files:
+        rel = path.relative_to(ROOT)
         raw = path.read_text(encoding="utf-8")
         try:
             data = yaml.safe_load(raw)
         except yaml.YAMLError as exc:
-            check(False, f"{path.name} parses ({exc})")
+            check(False, f"{rel} parses ({exc})")
             continue
-        check(isinstance(data, dict), f"{path.name} parses to a mapping")
+        check(isinstance(data, dict), f"{rel} parses to a mapping")
 
         types: set[str] = set()
 
@@ -378,7 +379,7 @@ def test_dashboard_files() -> None:
         card_types = types - {"numeric-input", "toggle", "slider",
                               "buttons", "select-options", "trend-graph"}
         unknown = {t for t in card_types if t not in BUILTIN_CARDS}
-        check(not unknown, f"{path.name}: only built-in cards (unknown: {sorted(unknown)})")
+        check(not unknown, f"{rel}: only built-in cards (unknown: {sorted(unknown)})")
 
         bad = []
         for node in walk_strings(data):
@@ -387,7 +388,7 @@ def test_dashboard_files() -> None:
                     env.parse(node)
                 except Exception as exc:  # noqa: BLE001
                     bad.append((node[:50], str(exc)))
-        check(not bad, f"{path.name}: all Jinja templates parse")
+        check(not bad, f"{rel}: all Jinja templates parse")
         for snippet, err in bad:
             print(f"        bad: {snippet!r} -> {err}")
 

@@ -1,0 +1,27 @@
+# --------------------------------------------------------------------------
+#  GSW Smart Hot Water — Κάρτα 01: Επικεφαλίδα κατάστασης
+#  Βάλε το σε dashboard: Edit -> + Add card -> Manual -> επικόλλησε.
+#  Δείχνει: κατάσταση λέβητα (ελληνικά), νερό, συλλέκτη, έξω, πρόοδο,
+#  υπόλοιπο χρόνου και τον λόγο της τελευταίας ενέργειας.
+# --------------------------------------------------------------------------
+type: markdown
+content: |
+  {% set s = states('input_select.gsw_hotwater_status') %}
+  {% set meta = {
+       'Heating':        ['🔥', 'Θέρμανση'],
+       'Target reached': ['✅', 'Έτοιμο'],
+       'Idle':           ['⏸️', 'Αναμονή'],
+       'Blocked':        ['⛔', 'Μπλοκαρισμένο'],
+       'Solar skip':     ['☀️', 'Παράλειψη ηλιακού'],
+       'Defrost':        ['❄️', 'Defrost'],
+       'Boost':          ['⚡', 'Boost']
+     }.get(s, ['💧', s if s != 'unknown' else '—']) %}
+  # {{ meta[0] }} {{ meta[1] }}
+  **Νερό χρήσης:** {{ states('sensor.temperature_esp_temperature_esp') }} °C
+  **Συλλέκτης:** {{ states('sensor.temperature_esp_outside_temperature') }} °C
+  **Έξω:** {{ states('sensor.gw2000a_outdoor_temperature') }} °C
+  **Πρόοδος:** {{ states('input_number.gsw_hotwater_progress') }} % ·
+  **Υπόλοιπο:** {{ states('input_number.gsw_time_left_minutes') }} min
+  {% if states('input_text.gsw_last_reason') not in ['unknown', ''] %}
+  **Λόγος:** {{ states('input_text.gsw_last_reason') }}
+  {% endif %}

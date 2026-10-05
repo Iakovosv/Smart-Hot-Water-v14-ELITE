@@ -1,0 +1,20 @@
+# --------------------------------------------------------------------------
+#  GSW Smart Hot Water — Κάρτα 07: Κατανάλωση & σύστημα
+#  Δείχνει: ισχύ θερμοσίφωνα, cloud έλεγχο, τροφοδοσία Raspberry Pi, uptime.
+# --------------------------------------------------------------------------
+type: entities
+title: Κατανάλωση / σύστημα
+show_header_toggle: false
+entities:
+  - entity: sensor.water_heater_cloud_power
+    name: Ισχύς θερμοσίφωνα
+    icon: mdi:flash
+  - entity: switch.water_heater_cloud
+    name: Cloud έλεγχος
+    icon: mdi:cloud
+  - entity: binary_sensor.rpi_power_status
+    name: Τροφοδοσία Raspberry Pi
+    icon: mdi:raspberry-pi
+  - entity: sensor.uptime_4
+    name: Uptime
+    icon: mdi:clock-outline

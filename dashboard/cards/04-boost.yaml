@@ -1,0 +1,20 @@
+# --------------------------------------------------------------------------
+#  GSW Smart Hot Water — Κάρτα 04: Boost
+#  Δείχνει: κουμπί άμεσου boost, στόχο, μέγιστα λεπτά, λειτουργία.
+# --------------------------------------------------------------------------
+type: entities
+title: ⚡ Boost
+show_header_toggle: false
+entities:
+  - entity: input_button.gsw_hotwater_boost
+    name: Άμεσο boost
+    icon: mdi:flash
+  - entity: input_number.gsw_boost_target_temp
+    name: Στόχος boost
+    icon: mdi:thermometer
+  - entity: input_number.gsw_boost_minutes
+    name: Λεπτά boost
+    icon: mdi:timer
+  - entity: input_select.gsw_boost_mode
+    name: Λειτουργία boost
+    icon: mdi:cog

@@ -1,0 +1,29 @@
+# --------------------------------------------------------------------------
+#  GSW Smart Hot Water — Κάρτα 05: Τιμές (tiles)
+#  Ίδια δεδομένα με την 02 αλλά σαν μεγάλα tiles με εικονίδια.
+#  Καλή για κινητό. Χρησιμοποίησε ΕΙΤΕ την 02 ΕΙΤΕ την 05.
+# --------------------------------------------------------------------------
+type: grid
+columns: 2
+square: false
+cards:
+  - type: tile
+    entity: sensor.temperature_esp_temperature_esp
+    name: Νερό χρήσης
+    icon: mdi:water-thermometer
+    color: deep-orange
+  - type: tile
+    entity: sensor.temperature_esp_outside_temperature
+    name: Συλλέκτης
+    icon: mdi:solar-panel-large
+    color: amber
+  - type: tile
+    entity: sensor.gw2000a_outdoor_temperature
+    name: Έξω
+    icon: mdi:thermometer
+    color: blue
+  - type: tile
+    entity: input_number.gsw_hotwater_progress
+    name: Πρόοδος
+    icon: mdi:progress-clock
+    color: green

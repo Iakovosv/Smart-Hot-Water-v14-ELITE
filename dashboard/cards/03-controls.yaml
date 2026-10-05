@@ -1,0 +1,21 @@
+# --------------------------------------------------------------------------
+#  GSW Smart Hot Water — Κάρτα 03: Χειριστήρια
+#  Δείχνει: ρελέ θερμοσίφωνα (πραγματικός διακόπτης), master enable,
+#  μπλοκάρισμα θέρμανσης (water_temperature_check), solar skip.
+# --------------------------------------------------------------------------
+type: entities
+title: Χειριστήρια
+show_header_toggle: false
+entities:
+  - entity: switch.smart_power_outlet_1
+    name: Θερμοσίφωνας (ρελέ)
+    icon: mdi:power
+  - entity: input_boolean.gsw_smart_hotwater_enable
+    name: Έξυπνος έλεγχος (master)
+    icon: mdi:water-boiler
+  - entity: input_boolean.water_temperature_check
+    name: Μπλοκάρισμα θέρμανσης
+    icon: mdi:water-off
+  - entity: input_boolean.gsw_solar_skip
+    name: Παράλειψη λόγω ηλιακού
+    icon: mdi:weather-sunny

@@ -1,0 +1,12 @@
+# --------------------------------------------------------------------------
+#  GSW Smart Hot Water — Κάρτα 10: Αυτοματισμοί
+#  Δείχνει: κατάσταση των δύο αυτοματισμών (main + watchdog) με toggle.
+# --------------------------------------------------------------------------
+type: entities
+title: Αυτοματισμοί
+show_header_toggle: false
+entities:
+  - entity: automation.gsw_smart_hot_water_v22_elite
+    name: GSW Smart Hot Water
+  - entity: automation.gsw_boiler_safety
+    name: GSW Boiler Safety (watchdog)

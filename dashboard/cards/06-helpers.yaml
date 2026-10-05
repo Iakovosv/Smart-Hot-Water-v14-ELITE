@@ -1,0 +1,25 @@
+# --------------------------------------------------------------------------
+#  GSW Smart Hot Water — Κάρτα 06: Όλες οι βοηθητικές οντότητες
+#  Δείχνει: κατάσταση (EN/EL), πρόοδο, χρόνο που απομένει (min/%), τελευταία
+#  ενεργοποίηση, λόγο τελευταίας ενέργειας.
+#  ΣΗΜΕΙΩΣΗ: time_left_* και last_reason είναι ΠΡΟΑΙΡΕΤΙΚΑ - αν δεν τα έχεις,
+#  σβήσε τις γραμμές τους.
+# --------------------------------------------------------------------------
+type: entities
+title: Βοηθητικές οντότητες
+show_header_toggle: false
+entities:
+  - entity: input_select.gsw_hotwater_status
+    name: Κατάσταση (EN)
+  - entity: input_select.gsw_boiler_status
+    name: Κατάσταση λέβητα (EL)
+  - entity: input_number.gsw_hotwater_progress
+    name: Πρόοδος %
+  - entity: input_number.gsw_time_left_minutes
+    name: Υπόλοιπο (min)
+  - entity: input_number.gsw_time_left_pct
+    name: Υπόλοιπο %
+  - entity: input_datetime.water_heater_on
+    name: Τελευταία ενεργοποίηση
+  - entity: input_text.gsw_last_reason
+    name: Λόγος τελευταίας ενέργειας
