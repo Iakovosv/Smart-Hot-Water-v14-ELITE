@@ -906,6 +906,15 @@ action:
                   boost_start: "{{ now().timestamp() }}"
               - repeat:
                   sequence:
+                    - variables:
+                        boost_target: >-
+                          {% set v = states(boost_target_entity) | float(0) %}
+                          {% set lo = state_attr(boost_target_entity, 'min') | float(0) %}
+                          {{ v if (v > 0 and (lo <= 0 or v > lo)) else warm_temp }}
+                        boost_max: >-
+                          {% set v = states(boost_minutes_entity) | float(0) %}
+                          {% set lo = state_attr(boost_minutes_entity, 'min') | float(0) %}
+                          {{ v if (v > 0 and (lo <= 0 or v > lo)) else max_warm_time }}
                     - if:
                         - condition: template
                           value_template: "{{ time_left_helper not in ['', none] }}"
@@ -943,6 +952,7 @@ action:
                       value_template: >-
                         {{ (states(water_temp_sensor_entity) | float(0)) >= boost_target
                            or (now().timestamp() - boost_start) / 60 >= boost_max
+                           or not is_state(master_enable_entity, 'on')
                            or is_state(water_temp_check_entity, 'on')
                            or states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}
               - service: switch.turn_off
@@ -1316,6 +1326,7 @@ action:
                                 value_template: >-
                                   {{ (states(water_temp_sensor_entity) | float(0)) >= (heat_below | float(0))
                                      or (now().timestamp() - heat_start) / 60 >= (max_time_val | float(0))
+                                     or not is_state(master_enable_entity, 'on')
                                      or is_state(water_temp_check_entity, 'on')
                                      or states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}
                         - service: switch.turn_off

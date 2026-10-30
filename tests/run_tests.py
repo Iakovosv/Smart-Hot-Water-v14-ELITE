@@ -1538,6 +1538,142 @@ def test_boost_stop_first_of_temp_or_time() -> None:
         print(f"        {p}")
 
 
+def test_boost_live_controls_and_master_off() -> None:
+    """Real HA engine: controls act DURING operation, not only at the start.
+
+    Regression for a bug where boost_target / boost_max were computed once when
+    boost started and then frozen, so changing the target temperature or the
+    max minutes while heating had no effect. Also checks that turning the master
+    switch off mid-run stops heating (safety). Skipped (ok) without HA.
+    """
+    print("test_boost_live_controls_and_master_off (real HA engine, mid-run)")
+    try:
+        import asyncio  # noqa: PLC0415
+
+        from homeassistant.components.automation import config as ac  # noqa: PLC0415
+        from homeassistant.components.blueprint import models  # noqa: PLC0415
+        from homeassistant.core import Context, HomeAssistant  # noqa: PLC0415
+        from homeassistant.helpers import config_validation as cv  # noqa: PLC0415
+        from homeassistant.helpers.script import Script  # noqa: PLC0415
+        from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
+    except ImportError:
+        print("  ok   - Home Assistant not installed, skipped")
+        return
+
+    path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
+
+    async def run() -> list[str]:
+        problems: list[str] = []
+        hass = HomeAssistant("")
+        await hass.async_start()
+        cv._hass.hass = hass
+        bp = models.Blueprint(yloader.load_yaml(path), path=path,
+                              schema=ac.AUTOMATION_BLUEPRINT_SCHEMA)
+        inputs = {}
+        for key, spec in bp.inputs.items():
+            default = spec.get("default", "") if isinstance(spec, dict) else ""
+            inputs[key] = SAMPLE_INPUTS.get(key, default)
+        cfg = ac.PLATFORM_SCHEMA(
+            models.BlueprintInputs(
+                bp, {"use_blueprint": {"path": path, "input": inputs}}
+            ).async_substitute())
+
+        # Shorten the boost loop poll from 30s to 1s (test speed only).
+        then_steps = cfg["actions"][0]["choose"][0]["sequence"][0]["then"]
+        repeat = next(s for s in then_steps if "repeat" in s)["repeat"]
+        for step in repeat["sequence"]:
+            if "delay" in step:
+                step["delay"] = {"seconds": 1}
+
+        calls: list[str] = []
+        hass.services.async_register("switch", "turn_on",
+                                     lambda c: calls.append("on"))
+        hass.services.async_register("switch", "turn_off",
+                                     lambda c: calls.append("off"))
+        hass.services.async_register("input_select", "select_option",
+                                     lambda c: None)
+        for dom, svc in (("input_number", "set_value"),
+                         ("input_datetime", "set_datetime"),
+                         ("input_text", "set_value"),
+                         ("notify", "mobile")):
+            hass.services.async_register(dom, svc, lambda c: None)
+
+        num_attrs = {"min": 0, "max": 180, "step": 1}
+
+        def put(entity, value, attrs=None):
+            hass.states.async_set(entity, str(value), attrs or {})
+
+        async def start(water, target, minutes) -> "asyncio.Task":
+            calls.clear()
+            put("input_boolean.gsw_smart_hotwater_enable", "on")
+            put("switch.boiler", "off")
+            put("sensor.water", water)
+            put("input_number.gsw_boost_target_temp", target, num_attrs)
+            put("input_number.gsw_boost_minutes", minutes, num_attrs)
+            put("input_boolean.water_temperature_check", "off")
+            put("sensor.out", 15)
+            put("input_select.status", "Idle")
+            put("input_select.boiler", "Αναμονή")
+            await asyncio.sleep(0.1)
+            script = Script(hass, cfg["actions"], "probe", "automation",
+                            variables=cfg["variables"])
+            task = asyncio.create_task(script.async_run(
+                run_variables={"trigger": {"id": "boost"}},
+                context=Context()))
+            await asyncio.sleep(2.0)
+            return task
+
+        async def stop(task) -> None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            await asyncio.sleep(0.1)
+
+        # 1. Lower the target below the current water temp mid-run -> stop.
+        task = await start(water=45, target=60, minutes=60)
+        if "on" not in calls:
+            problems.append("boost never started")
+        calls.clear()
+        put("input_number.gsw_boost_target_temp", 40, num_attrs)
+        await asyncio.sleep(2.5)
+        if "off" not in calls:
+            problems.append("lowering the target mid-boost had no effect")
+        await stop(task)
+
+        # 2. Lower the max minutes below the elapsed time mid-run -> stop.
+        task = await start(water=36, target=60, minutes=60)
+        if "on" not in calls:
+            problems.append("boost never started")
+        calls.clear()
+        put("input_number.gsw_boost_minutes", 0.05, num_attrs)
+        await asyncio.sleep(2.5)
+        if "off" not in calls:
+            problems.append("lowering the max minutes mid-boost had no effect")
+        await stop(task)
+
+        # 3. Master switch off mid-run -> stop (safety).
+        task = await start(water=36, target=60, minutes=60)
+        if "on" not in calls:
+            problems.append("boost never started")
+        calls.clear()
+        put("input_boolean.gsw_smart_hotwater_enable", "off")
+        await asyncio.sleep(2.5)
+        if "off" not in calls:
+            problems.append("master off mid-boost did not stop heating")
+        await stop(task)
+
+        await hass.async_stop()
+        return problems
+
+    problems = asyncio.run(run())
+    check(not problems,
+          "boost honours live control changes and master-off during operation")
+    for p in problems:
+        print(f"        {p}")
+
+
 def main() -> int:
     for name in BLUEPRINTS:
         print(f"\n===== Validating {name} =====")
@@ -1558,6 +1694,7 @@ def main() -> int:
     test_boost_guard_end_to_end()
     test_boost_unset_helper_falls_back()
     test_boost_stop_first_of_temp_or_time()
+    test_boost_live_controls_and_master_off()
     test_dashboard_files()
     test_helper_coverage()
     test_gauge_and_rounding()

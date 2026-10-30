@@ -1,5 +1,5 @@
 {
-  "version": "1.12.10",
+  "version": "1.12.11",
   "blueprints": [
     "gsw_smart_hot_water.yaml",
     "gsw_boiler_safety.yaml"
