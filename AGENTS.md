@@ -83,6 +83,19 @@ Sanity-check the harness by adding a bogus domain; it must report
 - Optional helper entities (`gsw_time_left_minutes`, `gsw_time_left_pct`,
   `gsw_last_reason`, `gsw_solar_skip`, `gsw_boiler_status`) live in
   `helpers/gsw_hotwater.yaml`; without them the UI shows `unknown` / "Entity not found".
+- **A `variables:` block runs ONCE where it sits.** Anything derived from a live
+  helper (boost target/minutes, etc.) must be re-assigned *inside* the `repeat`
+  sequence, otherwise the value is frozen for the whole run and mid-operation
+  changes do nothing. `until:` is evaluated against the current variables after
+  each iteration, so a re-assignment is picked up on the next poll (≤30s).
+  Fixed in v1.12.11 for `boost_target` / `boost_max`.
+- Every heating loop's `until:` must also stop when `master_enable` goes off
+  (`or not is_state(master_enable_entity, 'on')`). Without it, turning the main
+  switch off mid-run left the relay on (fixed v1.12.11).
+- When a test drives a long `repeat`/`delay` loop, do **not** call
+  `await hass.async_block_till_done()` while the loop is running - it never
+  returns because the loop keeps scheduling. Use `asyncio.sleep()` to poll and
+  `task.cancel()` to stop.
 
 ## Release flow
 1. Bump `custom_components/gsw_hotwater/manifest.json` + `version.json`.
