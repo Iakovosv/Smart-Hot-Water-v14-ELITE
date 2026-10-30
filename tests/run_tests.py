@@ -879,6 +879,270 @@ def test_boost_guard_end_to_end() -> None:
         print(f"        {p}")
 
 
+def test_no_undefined_template_variables() -> None:
+    """Every name used in a template must be defined somewhere.
+
+    Collects every name the blueprint defines globally (declared inputs, keys
+    of any `variables:` mapping, `{% set %}`/`{% for %}` targets and
+    `namespace(...)` fields) plus HA's template builtins, then fails if any
+    template references a name that is defined nowhere. This catches the
+    `master_on` class of bug, where a template reads a variable that no part
+    of the blueprint ever sets (Jinja silently renders it as undefined).
+    """
+    print("test_no_undefined_template_variables")
+    from jinja2 import meta  # noqa: PLC0415
+
+    builtins = {
+        "now", "states", "is_state", "state_attr", "today_at", "as_timestamp",
+        "as_datetime", "trigger", "true", "false", "none", "this", "context",
+        "repeat", "iif", "float", "int", "expand", "distance", "closest",
+        "has_value", "area_id", "area_name", "device_id", "device_name",
+        "is_device_attr", "entity_id", "label_id", "label_name", "labels",
+        "floors", "floor_id", "floor_name", "relative_time", "timedelta",
+        "utcnow", "strptime", "min", "max", "range", "dict", "list",
+        "namespace", "zip", "abs", "round", "log", "sin", "cos", "tan", "pi",
+        "e", "as_local", "as_utc", "set", "tojson", "fromjson", "slugify",
+        "is_number", "device_entities", "integration_entities",
+        "config_entry_id", "config_entry_attr",
+    }
+    filters = {
+        "bool", "float", "int", "round", "max", "min", "abs", "timestamp_custom",
+        "as_timestamp", "as_datetime", "as_local", "relative_time", "tojson",
+        "fromjson", "regex_match", "regex_replace", "regex_search", "slugify",
+        "bitwise_and", "bitwise_or", "average", "clamp", "ord", "is_number",
+        "multiply", "add", "log", "sqrt", "sin", "cos", "tan", "base64_encode",
+        "base64_decode", "md5", "sha1", "sha256", "to_json", "from_json",
+        "strptime", "as_utc", "utcnow", "now", "today_at", "states",
+        "is_state", "state_attr", "iif", "has_value", "expand", "union",
+        "intersect", "difference", "count", "zip", "timestamp_local",
+        "timestamp_utc", "default", "select", "reject", "map", "list",
+        "attr", "first", "last", "join", "length", "trim", "replace",
+    }
+
+    env = Environment()
+    for f in filters:
+        env.filters.setdefault(f, lambda *a, **k: None)
+
+    for name in BLUEPRINTS:
+        bp = load_blueprint(name)
+
+        defined: set[str] = set(builtins)
+        # declared inputs
+        for section in ("blueprint",):
+            for key in (bp.get(section, {}).get("input") or {}):
+                defined.add(key)
+
+        def collect(obj) -> None:
+            if isinstance(obj, dict):
+                if isinstance(obj.get("variables"), dict):
+                    defined.update(obj["variables"].keys())
+                for k, v in obj.items():
+                    if k in ("input",) and isinstance(v, dict):
+                        defined.update(v.keys())
+                    collect(v)
+            elif isinstance(obj, list):
+                for v in obj:
+                    collect(v)
+            elif isinstance(obj, str):
+                for m in re.finditer(r"{%-?\s*set\s+([A-Za-z_]\w*)", obj):
+                    defined.add(m.group(1))
+                for m in re.finditer(r"{%-?\s*for\s+([A-Za-z_]\w*)", obj):
+                    defined.add(m.group(1))
+                for m in re.finditer(r"\bnamespace\(([^)]*)\)", obj):
+                    for part in m.group(1).split(","):
+                        field = part.split("=")[0].strip()
+                        if field:
+                            defined.add(field)
+        collect(bp)
+
+        offenders: list[str] = []
+        for text in walk(bp):
+            if not isinstance(text, str) or ("{{" not in text and "{%" not in text):
+                continue
+            try:
+                ast = env.parse(text)
+            except Exception:
+                continue  # syntax errors are covered by test_jinja
+            for und in meta.find_undeclared_variables(ast):
+                if und not in defined:
+                    offenders.append(f"{name}: '{und}' in {text.strip()[:70]!r}")
+
+        check(not offenders,
+              f"{name}: no template references an undefined variable")
+        for off in offenders:
+            print(f"        {off}")
+
+
+def test_boost_unset_helper_falls_back() -> None:
+    """A boost helper left at its `min` must not silently disable boost.
+
+    An input_number that was never configured sits at its minimum (25°C for
+    the bundled helper). The boost branch must treat that as "not set" and use
+    the blueprint's warm-weather default, so pressing boost still heats.
+    Skipped (ok) when HA is not installed.
+    """
+    print("test_boost_unset_helper_falls_back (real HA engine)")
+    try:
+        import asyncio  # noqa: PLC0415
+
+        from homeassistant.components.automation import config as ac  # noqa: PLC0415
+        from homeassistant.components.blueprint import models  # noqa: PLC0415
+        from homeassistant.core import Context, HomeAssistant  # noqa: PLC0415
+        from homeassistant.helpers import config_validation as cv  # noqa: PLC0415
+        from homeassistant.helpers.script import Script  # noqa: PLC0415
+        from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
+    except ImportError:
+        print("  ok   - Home Assistant not installed, skipped")
+        return
+
+    path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
+
+    async def run() -> list[str]:
+        problems: list[str] = []
+        hass = HomeAssistant("")
+        await hass.async_start()
+        cv._hass.hass = hass
+        bp = models.Blueprint(yloader.load_yaml(path), path=path,
+                              schema=ac.AUTOMATION_BLUEPRINT_SCHEMA)
+        inputs = {}
+        for key, spec in bp.inputs.items():
+            default = spec.get("default", "") if isinstance(spec, dict) else ""
+            inputs[key] = SAMPLE_INPUTS.get(key, default)
+        cfg = ac.PLATFORM_SCHEMA(
+            models.BlueprintInputs(
+                bp, {"use_blueprint": {"path": path, "input": inputs}}
+            ).async_substitute())
+
+        calls: list[str] = []
+        hass.services.async_register("switch", "turn_on",
+                                     lambda call: calls.append("on"))
+        hass.services.async_register("switch", "turn_off",
+                                     lambda call: calls.append("off"))
+        for dom, svc in (("input_select", "select_option"),
+                         ("input_number", "set_value"),
+                         ("input_datetime", "set_datetime"),
+                         ("input_text", "set_value"),
+                         ("notify", "mobile")):
+            hass.services.async_register(dom, svc, lambda call: None)
+
+        # Helper states + attributes exactly as the bundled helpers produce
+        # them before the user touches anything (value == min).
+        hass.states.async_set(
+            "input_number.gsw_boost_target_temp", "25",
+            {"min": 25.0, "max": 70.0, "step": 1.0, "mode": "box"})
+        hass.states.async_set(
+            "input_number.gsw_boost_minutes", "5",
+            {"min": 5.0, "max": 180.0, "step": 5.0, "mode": "box"})
+        for entity, state in {
+            "input_boolean.gsw_smart_hotwater_enable": "on",
+            "switch.boiler": "off",
+            "sensor.water": "40",
+            "sensor.out": "15",
+            "input_boolean.water_temperature_check": "off",
+            "input_select.status": "Idle",
+        }.items():
+            hass.states.async_set(entity, state)
+        await hass.async_block_till_done()
+
+        script = Script(hass, cfg["actions"], "probe", "automation",
+                        variables=cfg["variables"])
+        task = asyncio.create_task(script.async_run(
+            run_variables={"trigger": {"id": "boost"}}, context=Context()))
+        await asyncio.sleep(1.5)
+        if "on" not in calls:
+            problems.append(
+                "boost with unset helpers (target=min 25, minutes=min 5) did "
+                "not turn the relay on for 40°C water")
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        await hass.async_stop()
+        return problems
+
+    problems = asyncio.run(run())
+    check(not problems, "boost still heats when its helpers sit at their minimum")
+    for p in problems:
+        print(f"        {p}")
+
+
+def test_presence_gate_skips_when_unset() -> None:
+    """require_presence with no user/zone configured must not block heating.
+
+    The bundled blueprint defaults require_presence to true while user_1 and
+    its zones default to empty. Treating that as "nobody is home" made every
+    schedule silently do nothing out of the box; the gate must be skipped when
+    there is nothing to check, exactly as the README promises.
+    """
+    print("test_presence_gate_skips_when_unset (real HA engine)")
+    try:
+        import asyncio  # noqa: PLC0415
+
+        from homeassistant.components.automation import config as ac  # noqa: PLC0415
+        from homeassistant.components.blueprint import models  # noqa: PLC0415
+        from homeassistant.core import HomeAssistant  # noqa: PLC0415
+        from homeassistant.helpers import config_validation as cv  # noqa: PLC0415
+        from homeassistant.helpers.template import Template  # noqa: PLC0415
+        from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
+    except ImportError:
+        print("  ok   - Home Assistant not installed, skipped")
+        return
+
+    path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
+
+    async def run() -> list[str]:
+        problems: list[str] = []
+        hass = HomeAssistant("")
+        await hass.async_start()
+        cv._hass.hass = hass
+        bp = models.Blueprint(yloader.load_yaml(path), path=path,
+                              schema=ac.AUTOMATION_BLUEPRINT_SCHEMA)
+
+        def find(obj, key):
+            if isinstance(obj, dict):
+                if isinstance(obj.get("variables"), dict) and key in obj["variables"]:
+                    return obj["variables"][key]
+                for v in obj.values():
+                    r = find(v, key)
+                    if r is not None:
+                        return r
+            elif isinstance(obj, list):
+                for v in obj:
+                    r = find(v, key)
+                    if r is not None:
+                        return r
+            return None
+
+        # Only the required inputs; everything else stays at its default,
+        # which is exactly how a user first adds the blueprint.
+        inputs = {}
+        for key, spec in bp.inputs.items():
+            default = spec.get("default", "") if isinstance(spec, dict) else ""
+            inputs[key] = default
+        inputs.update({"boiler_switch": "switch.boiler",
+                       "water_temp_sensor": "sensor.water",
+                       "outdoor_temp_sensor": "sensor.out"})
+        cfg = models.BlueprintInputs(
+            bp, {"use_blueprint": {"path": path, "input": inputs}}
+        ).async_substitute()
+        variables = cfg["variables"]
+        template = Template(find(cfg["actions"], "presence_ok"), hass)
+        rendered = template.async_render(dict(variables))
+        if str(rendered).strip().lower() not in ("true", "1"):
+            problems.append(
+                "presence gate blocked with no user/zone configured "
+                f"(rendered {rendered!r}, expected 'True')")
+        await hass.async_stop()
+        return problems
+
+    problems = asyncio.run(run())
+    check(not problems,
+          "presence gate is skipped when no user/zone is configured")
+    for p in problems:
+        print(f"        {p}")
+
+
 def test_boost_stop_first_of_temp_or_time() -> None:
     """Real HA engine: the boost loop stops on whichever comes FIRST.
 
@@ -1013,7 +1277,10 @@ def main() -> int:
     test_manifest()
     test_no_forbidden_mentions()
     test_ha_blueprint_save()
+    test_no_undefined_template_variables()
+    test_presence_gate_skips_when_unset()
     test_boost_guard_end_to_end()
+    test_boost_unset_helper_falls_back()
     test_boost_stop_first_of_temp_or_time()
     test_dashboard_files()
     test_helper_coverage()

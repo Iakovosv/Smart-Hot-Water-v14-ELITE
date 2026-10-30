@@ -758,8 +758,18 @@ action:
                 state: "on"
             then:
               - variables:
-                  boost_target: "{{ states(boost_target_entity) | float(warm_temp) }}"
-                  boost_max: "{{ states(boost_minutes_entity) | float(max_warm_time) }}"
+                  # An input_number helper that was never set sits at its
+                  # `min`; treat that (and 0/unknown) as "not configured" and
+                  # fall back to the warm-weather defaults instead of using
+                  # e.g. a 25°C boost target that would never heat.
+                  boost_target: >-
+                    {% set v = states(boost_target_entity) | float(0) %}
+                    {% set lo = state_attr(boost_target_entity, 'min') | float(0) %}
+                    {{ v if (v > 0 and (lo <= 0 or v > lo)) else warm_temp }}
+                  boost_max: >-
+                    {% set v = states(boost_minutes_entity) | float(0) %}
+                    {% set lo = state_attr(boost_minutes_entity, 'min') | float(0) %}
+                    {{ v if (v > 0 and (lo <= 0 or v > lo)) else max_warm_time }}
                   boost_start: "{{ now().timestamp() }}"
               - if:
                   - condition: template
@@ -1124,18 +1134,20 @@ action:
                             max_time_val: >-
                               {{ max_cold_time if now_out < cold_threshold_val else max_warm_time }}
                             presence_ok: >-
-                              {% if not require_presence_val %}
+                              {% set u1_ok = user_1_entity not in ['', none] and (user_1_zones_list | length > 0) %}
+                              {% set u2_ok = user_2_entity not in ['', none] and (user_2_zones_list | length > 0) %}
+                              {% if not require_presence_val or not (u1_ok or u2_ok) %}
                                 {{ true }}
                               {% else %}
                                 {% set ns = namespace(here=false) %}
-                                {% if user_1_zones_list | length > 0 %}
+                                {% if u1_ok %}
                                   {% for z in user_1_zones_list %}
                                     {% if states(user_1_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
                                       {% set ns.here = true %}
                                     {% endif %}
                                   {% endfor %}
                                 {% endif %}
-                                {% if user_2_entity not in ['', none] and user_2_zones_list | length > 0 %}
+                                {% if u2_ok %}
                                   {% for z in user_2_zones_list %}
                                     {% if states(user_2_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
                                       {% set ns.here = true %}
@@ -1159,7 +1171,7 @@ action:
                                 {{ false }}
                               {% endif %}
                             sch_reason: >-
-                              {%- if not master_on -%}master_off
+                              {%- if not is_state(master_enable_entity, 'on') -%}master_off
                               {%- elif not presence_ok -%}no_presence
                               {%- elif states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] -%}sensor_bad
                               {%- elif is_state(water_temp_check_entity, 'on') -%}blocked_check
