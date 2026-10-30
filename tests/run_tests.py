@@ -1143,6 +1143,196 @@ def test_presence_gate_skips_when_unset() -> None:
         print(f"        {p}")
 
 
+def test_schedule_gates_end_to_end() -> None:
+    """Real HA engine: run the whole schedule action chain for each gate.
+
+    Fires the `sched_1` trigger with real helpers and asserts both whether the
+    relay turned on and what `last_reason` recorded, for master off, presence,
+    bad sensor, safety max, solar skip, already-hot, disabled schedule, and the
+    happy path (heat then stop at target). Skipped (ok) without HA.
+    """
+    print("test_schedule_gates_end_to_end (real HA engine, schedule gates)")
+    try:
+        import asyncio  # noqa: PLC0415
+        import datetime as _dt  # noqa: PLC0415
+
+        from homeassistant import loader  # noqa: PLC0415
+        from homeassistant.components.automation import config as ac  # noqa: PLC0415
+        from homeassistant.components.blueprint import models  # noqa: PLC0415
+        from homeassistant.config_entries import ConfigEntries  # noqa: PLC0415
+        from homeassistant.core import Context, HomeAssistant  # noqa: PLC0415
+        from homeassistant.helpers import area_registry as ar  # noqa: PLC0415
+        from homeassistant.helpers import config_validation as cv  # noqa: PLC0415
+        from homeassistant.helpers import device_registry as dr  # noqa: PLC0415
+        from homeassistant.helpers import entity_registry as er  # noqa: PLC0415
+        from homeassistant.helpers.script import Script  # noqa: PLC0415
+        from homeassistant.setup import async_setup_component  # noqa: PLC0415
+        from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
+    except ImportError:
+        print("  ok   - Home Assistant not installed, skipped")
+        return
+
+    path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
+    base = {"switch.boiler": "off", "sensor.water": "30", "sensor.out": "15",
+            "input_boolean.gsw_smart_hotwater_enable": "on",
+            "input_boolean.water_temperature_check": "off",
+            "input_select.status": "Idle", "input_text.reason": ""}
+    entity_inputs = {
+        "boiler_switch": "switch.boiler", "water_temp_sensor": "sensor.water",
+        "outdoor_temp_sensor": "sensor.out",
+        "status_entity": "input_select.status",
+        "progress_entity": "input_number.progress",
+        "last_reason": "input_text.reason",
+        "boost_target_temp": "input_number.boost_target",
+        "boost_minutes": "input_number.boost_minutes",
+    }
+    cases = [
+        # name, extra inputs, extra states, trigger, water_seq,
+        # expect_on_after_start, expect_reason
+        ("happy path heats then stops", {"schedule_1_enabled": True}, {},
+         "sched_1", [40, 50, 55, 58, 60], True, "sched 1: heating"),
+        ("disabled schedule", {"schedule_1_enabled": False}, {},
+         "sched_1", None, False, None),
+        ("master off", {"schedule_1_enabled": True},
+         {"input_boolean.gsw_smart_hotwater_enable": "off"},
+         "sched_1", None, False, "sched 1: master_off"),
+        ("presence away", {"schedule_1_enabled": True, "require_presence": True,
+                           "user_1": "person.a", "user_1_zones": ["zone.z1"]},
+         {"person.a": "not_home", "zone.z1": "0"},
+         "sched_1", None, False, "sched 1: no_presence"),
+        ("presence home", {"schedule_1_enabled": True, "require_presence": True,
+                           "user_1": "person.a", "user_1_zones": ["zone.z1"]},
+         {"person.a": "home", "zone.z1": "0"},
+         "sched_1", None, True, "sched 1: heating"),
+        ("sensor unavailable", {"schedule_1_enabled": True},
+         {"sensor.water": "unknown"}, "sched_1", None, False,
+         "sched 1: sensor_bad"),
+        ("above safety max", {"schedule_1_enabled": True, "schedule_1_temp": 60},
+         {"sensor.water": "80"}, "sched_1", None, False, "sched 1: max_temp"),
+        ("solar skip", {"schedule_1_enabled": True, "solar_mode": "flag",
+                        "solar_flag": "binary_sensor.solar"},
+         {"binary_sensor.solar": "on"}, "sched_1", None, False,
+         "sched 1: solar_skip"),
+        ("already hot", {"schedule_1_enabled": True, "schedule_1_temp": 45},
+         {"sensor.water": "60"}, "sched_1", None, False, "sched 1: temp_ok"),
+    ]
+
+    async def run() -> list[str]:
+        problems: list[str] = []
+
+        async def one(extra_inputs, extra_states, trigger, water_seq,
+                      settle=0.5):
+            hass = HomeAssistant("")
+            await hass.async_start()
+            cv._hass.hass = hass
+            loader.async_setup(hass)
+            await hass.async_block_till_done()
+            hass.config_entries = ConfigEntries(hass, {})
+            await er.async_load(hass)
+            await dr.async_load(hass)
+            await ar.async_load(hass)
+            await async_setup_component(hass, "input_number", {"input_number": {
+                "progress": {"min": 0, "max": 100, "step": 1},
+                "boost_target": {"min": 25, "max": 70, "step": 1},
+                "boost_minutes": {"min": 5, "max": 180, "step": 5}}})
+            await async_setup_component(hass, "input_select", {"input_select": {
+                "status": {"options": ["Idle", "Heating", "Boost",
+                                       "Target reached", "Blocked", "Defrost",
+                                       "Solar skip"]}}})
+            await async_setup_component(hass, "input_text", {
+                "input_text": {"reason": {"max": 255}}})
+            await asyncio.sleep(0.1)
+
+            states = dict(base)
+            states.update(extra_states)
+            for e, s in states.items():
+                hass.states.async_set(e, s)
+
+            bp = models.Blueprint(yloader.load_yaml(path), path=path,
+                                  schema=ac.AUTOMATION_BLUEPRINT_SCHEMA)
+            inputs = {k: (v.get("default", "") if isinstance(v, dict) else "")
+                      for k, v in bp.inputs.items()}
+            inputs.update(entity_inputs)
+            inputs.setdefault("require_presence", False)
+            inputs.update(extra_inputs)
+            cfg = ac.PLATFORM_SCHEMA(models.BlueprintInputs(
+                bp, {"use_blueprint": {"path": path, "input": inputs}}
+            ).async_substitute())
+
+            def walk(o):
+                if isinstance(o, dict):
+                    if isinstance(o.get("delay"), _dt.timedelta):
+                        o["delay"] = _dt.timedelta(seconds=0.2)
+                    for v in o.values():
+                        walk(v)
+                elif isinstance(o, list):
+                    for v in o:
+                        walk(v)
+            walk(cfg["actions"])
+
+            async def sw_on(call):
+                eid = call.data.get("entity_id")
+                for e in ([eid] if isinstance(eid, str) else (eid or [])):
+                    hass.states.async_set(e, "on")
+
+            async def sw_off(call):
+                eid = call.data.get("entity_id")
+                for e in ([eid] if isinstance(eid, str) else (eid or [])):
+                    hass.states.async_set(e, "off")
+
+            hass.services.async_register("switch", "turn_on", sw_on)
+            hass.services.async_register("switch", "turn_off", sw_off)
+            # Real input_number/input_select/input_text services are already
+            # registered by async_setup_component above, so state changes are
+            # genuine. Only stub the ones that need external integrations.
+            for dom, svc in (("notify", "mobile"),
+                             ("input_datetime", "set_datetime"),
+                             ("input_boolean", "turn_on"),
+                             ("input_boolean", "turn_off")):
+                hass.services.async_register(dom, svc, lambda call: None)
+
+            script = Script(hass, cfg["actions"], "p", "automation",
+                            variables=cfg["variables"])
+            task = asyncio.create_task(script.async_run(
+                run_variables={"trigger": {"id": trigger, "platform": "time"}},
+                context=Context()))
+            await asyncio.sleep(settle)
+            on_start = hass.states.get("switch.boiler").state
+            if water_seq:
+                for v in water_seq:
+                    hass.states.async_set("sensor.water", str(v))
+                    await asyncio.sleep(0.3)
+                await asyncio.sleep(settle)
+            result = (on_start, hass.states.get("switch.boiler").state,
+                      hass.states.get("input_text.reason").state)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            await hass.async_block_till_done()
+            await hass.async_stop()
+            return result
+
+        for (name, extra, states, trigger, seq, want_on, want_reason) in cases:
+            on_start, on_end, reason = await one(extra, states, trigger, seq)
+            if (on_start == "on") != want_on:
+                problems.append(f"{name}: turn_on={on_start == 'on'} "
+                                f"expected {want_on}")
+            if want_reason is not None and reason != want_reason:
+                problems.append(f"{name}: reason={reason!r} "
+                                f"expected {want_reason!r}")
+            if name.startswith("happy") and on_end != "off":
+                problems.append("happy path did not turn the relay off at target")
+        return problems
+
+    problems = asyncio.run(run())
+    check(not problems,
+          "schedule action chain behaves correctly for all 9 gate scenarios")
+    for p in problems:
+        print(f"        {p}")
+
+
 def test_boost_stop_first_of_temp_or_time() -> None:
     """Real HA engine: the boost loop stops on whichever comes FIRST.
 
@@ -1279,6 +1469,7 @@ def main() -> int:
     test_ha_blueprint_save()
     test_no_undefined_template_variables()
     test_presence_gate_skips_when_unset()
+    test_schedule_gates_end_to_end()
     test_boost_guard_end_to_end()
     test_boost_unset_helper_falls_back()
     test_boost_stop_first_of_temp_or_time()

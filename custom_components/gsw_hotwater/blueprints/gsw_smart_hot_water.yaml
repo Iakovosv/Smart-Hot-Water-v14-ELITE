@@ -1004,6 +1004,18 @@ action:
                 sequence:
                   - if:
                       - condition: template
+                        value_template: "{{ last_reason_entity not in ['', none] }}"
+                    then:
+                      - service: input_text.set_value
+                        target:
+                          entity_id: "{{ last_reason_target }}"
+                        data:
+                          value: >-
+                            {%- if trigger.id == 'defrost_t' -%}defrost: master_off
+                            {%- else -%}sched {{ trigger.id.split('_')[-1] }}: master_off
+                            {%- endif -%}
+                  - if:
+                      - condition: template
                         value_template: "{{ status_entity not in ['', none] }}"
                     then:
                       - service: input_select.select_option
