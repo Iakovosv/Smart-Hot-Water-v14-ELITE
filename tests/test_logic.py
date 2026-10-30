@@ -65,18 +65,20 @@ def _make_env(states_map: dict, attrs_map: dict, now_dt: datetime) -> Environmen
 
 # The exact expressions from the blueprint -------------------------------- #
 
-PRESENCE = """{% if not require_presence_val %}
+PRESENCE = """{% set u1_ok = user_1_entity not in ['', none] and (user_1_zones_list | length > 0) %}
+{% set u2_ok = user_2_entity not in ['', none] and (user_2_zones_list | length > 0) %}
+{% if not require_presence_val or not (u1_ok or u2_ok) %}
   {{ true }}
 {% else %}
   {% set ns = namespace(here=false) %}
-  {% if user_1_zones_list | length > 0 %}
+  {% if u1_ok %}
     {% for z in user_1_zones_list %}
       {% if states(user_1_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
         {% set ns.here = true %}
       {% endif %}
     {% endfor %}
   {% endif %}
-  {% if user_2_entity not in ['', none] and user_2_zones_list | length > 0 %}
+  {% if u2_ok %}
     {% for z in user_2_zones_list %}
       {% if states(user_2_entity) in ['home', state_attr(z, 'friendly_name'), z.split('.')[-1]] %}
         {% set ns.here = true %}
@@ -216,10 +218,14 @@ def test_presence() -> None:
     r = render(env, PRESENCE, user_1_entity="person.iakovos", user_1_zones_list=zones,
                user_2_entity="", user_2_zones_list=[], require_presence_val=False)
     check(r == "True", "require_presence off -> always true")
-    # empty zones list -> nobody can match -> false (heating stays off)
+    # No user/zone configured -> presence gate is skipped (matches README)
+    r = render(env, PRESENCE, user_1_entity="", user_1_zones_list=[],
+               user_2_entity="", user_2_zones_list=[], require_presence_val=True)
+    check(r == "True", "presence on but no user/zone -> skipped (heats)")
+    # A configured user with no zone cannot be located -> no match
     r = render(env, PRESENCE, user_1_entity="person.iakovos", user_1_zones_list=[],
                user_2_entity="", user_2_zones_list=[], require_presence_val=True)
-    check(r == "False", "empty zones + presence on -> false (safe)")
+    check(r == "True", "user set, zones empty -> skipped (heats)")
 
 
 def test_solar() -> None:
@@ -625,7 +631,7 @@ def test_exhaustive_combinations() -> None:
         (False, "", [], "", [], True),                    # disabled -> ok
         (True, "person.a", ["zone.z1"], "", [], True),    # user1 home
         (True, "person.b", ["zone.z1"], "", [], False),   # user1 away
-        (True, "", [], "", [], False),                    # enabled, no zones
+        (True, "", [], "", [], True),                     # enabled, nothing set -> skipped
         (True, "person.b", [], "person.a", ["zone.z1"], True),   # user2 home
         (True, "person.b", [], "person.b", ["zone.z1"], False),  # both away
     ]
