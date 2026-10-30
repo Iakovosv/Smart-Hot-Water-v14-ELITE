@@ -98,7 +98,11 @@ blueprint:
           device_class: temperature
 
     outdoor_temp_sensor:
-      name: Outdoor temperature sensor (Αισθητήρας εξωτερικής θερμοκρασίας)
+      name: Outdoor temperature sensor - optional (Αισθητήρας εξωτερικής θερμοκρασίας - προαιρετικός)
+      description: >
+        [EN] Optional. Without it the warm-weather target/time is always used.
+        [EL] Προαιρετικός. Χωρίς αυτόν χρησιμοποιείται πάντα ο στόχος/χρόνος ήπιου καιρού.
+      default: ""
       selector:
         entity:
           domain: sensor
@@ -118,14 +122,21 @@ blueprint:
     # Presence
     # ------------------------------------------------------------------ #
     user_1:
-      name: User 1 (Χρήστης 1)
-      description: "[EN] Required person. [EL] Υποχρεωτικός χρήστης."
+      name: User 1 - optional (Χρήστης 1 - προαιρετικός)
+      description: >
+        [EN] Optional. Used only when "Require presence" is ON.
+        [EL] Προαιρετικός. Χρησιμοποιείται μόνο όταν το «Απαίτηση παρουσίας» είναι ON.
+      default: ""
       selector:
         entity:
           domain: person
 
     user_1_zones:
-      name: User 1 zones (Ζώνες χρήστη 1)
+      name: User 1 zones - optional (Ζώνες χρήστη 1 - προαιρετικές)
+      description: >
+        [EN] Optional. Zones where User 1 counts as present.
+        [EL] Προαιρετικές. Ζώνες όπου ο Χρήστης 1 θεωρείται παρών.
+      default: []
       selector:
         entity:
           domain: zone

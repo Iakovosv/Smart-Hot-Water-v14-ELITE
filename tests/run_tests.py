@@ -1143,6 +1143,90 @@ def test_presence_gate_skips_when_unset() -> None:
         print(f"        {p}")
 
 
+def test_automation_loads_with_minimal_inputs() -> None:
+    """The blueprint must produce a loadable automation from minimal inputs.
+
+    This is the real "it does nothing" failure mode: `user_1` and
+    `user_1_zones` had no default, so Home Assistant refused to build the
+    automation ("Missing input user_1, user_1_zones") and the entity stayed
+    `unavailable` - no trigger could ever fire. Loads the blueprint through the
+    real automation platform using only the mandatory entity inputs, exactly as
+    a user who does not want presence tracking would. Skipped (ok) without HA.
+    """
+    print("test_automation_loads_with_minimal_inputs (real automation platform)")
+    try:
+        import asyncio  # noqa: PLC0415
+        import pathlib  # noqa: PLC0415
+        import shutil  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+
+        from homeassistant import loader  # noqa: PLC0415
+        from homeassistant.config_entries import ConfigEntries  # noqa: PLC0415
+        from homeassistant.core import HomeAssistant  # noqa: PLC0415
+        from homeassistant.helpers import area_registry as ar  # noqa: PLC0415
+        from homeassistant.helpers import config_validation as cv  # noqa: PLC0415
+        from homeassistant.helpers import device_registry as dr  # noqa: PLC0415
+        from homeassistant.helpers import entity_registry as er  # noqa: PLC0415
+        from homeassistant.setup import async_setup_component  # noqa: PLC0415
+    except ImportError:
+        print("  ok   - Home Assistant not installed, skipped")
+        return
+
+    async def run() -> list[str]:
+        problems: list[str] = []
+        cfgdir = pathlib.Path(tempfile.mkdtemp(prefix="gswtest_"))
+        dest = cfgdir / "blueprints" / "automation" / "gsw_hotwater"
+        dest.mkdir(parents=True)
+        shutil.copy(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml",
+                    dest / "gsw_smart_hot_water.yaml")
+        try:
+            hass = HomeAssistant(str(cfgdir))
+            await hass.async_start()
+            cv._hass.hass = hass
+            loader.async_setup(hass)
+            await hass.async_block_till_done()
+            hass.config_entries = ConfigEntries(hass, {})
+            await er.async_load(hass)
+            await dr.async_load(hass)
+            await ar.async_load(hass)
+
+            hass.states.async_set("switch.boiler", "off")
+            hass.states.async_set("sensor.water", "40")
+
+            # Only the mandatory entity inputs - everything optional (including
+            # user_1 / user_1_zones) is left at its default.
+            ok = await async_setup_component(hass, "automation", {"automation": [{
+                "alias": "GSW minimal",
+                "use_blueprint": {
+                    "path": "gsw_hotwater/gsw_smart_hot_water.yaml",
+                    "input": {"boiler_switch": "switch.boiler",
+                              "water_temp_sensor": "sensor.water"},
+                }}]})
+            await hass.async_block_till_done()
+
+            if not ok:
+                problems.append("automation platform failed to load")
+            ents = hass.states.async_entity_ids("automation")
+            if not ents:
+                problems.append("no automation entity was created")
+            else:
+                state = hass.states.get(ents[0]).state
+                if state != "on":
+                    problems.append(
+                        f"automation entity is {state!r}, expected 'on' "
+                        "(blueprint inputs rejected)")
+            await hass.async_stop()
+        finally:
+            shutil.rmtree(cfgdir, ignore_errors=True)
+        return problems
+
+    problems = asyncio.run(run())
+    check(not problems,
+          "automation loads (state on) with only the mandatory inputs")
+    for p in problems:
+        print(f"        {p}")
+
+
 def test_schedule_gates_end_to_end() -> None:
     """Real HA engine: run the whole schedule action chain for each gate.
 
@@ -1469,6 +1553,7 @@ def main() -> int:
     test_ha_blueprint_save()
     test_no_undefined_template_variables()
     test_presence_gate_skips_when_unset()
+    test_automation_loads_with_minimal_inputs()
     test_schedule_gates_end_to_end()
     test_boost_guard_end_to_end()
     test_boost_unset_helper_falls_back()
