@@ -1,9 +1,7 @@
 {
   "domain": "gsw_hotwater",
   "name": "GSW Smart Hot Water",
-  "codeowners": [
-    "@Iakovosv"
-  ],
+  "codeowners": ["@Iakovosv"],
   "config_flow": true,
   "documentation": "https://github.com/Iakovosv/Smart-Hot-Water-v14-ELITE",
   "iot_class": "local_polling",
