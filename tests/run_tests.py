@@ -27,6 +27,7 @@ BLUEPRINT_DIR = PKG / "blueprints"
 BLUEPRINTS = ["gsw_smart_hot_water.yaml", "gsw_boiler_safety.yaml"]
 
 FAILURES: list[str] = []
+SKIPS: list[str] = []
 
 
 def check(cond: bool, msg: str) -> None:
@@ -35,6 +36,16 @@ def check(cond: bool, msg: str) -> None:
     else:
         print(f"  FAIL - {msg}")
         FAILURES.append(msg)
+
+
+def skip(msg: str) -> None:
+    """Record a test that could not run (e.g. Home Assistant missing).
+
+    Reported as SKIP, never as a pass, so a green run always means the real
+    Home Assistant engine actually executed.
+    """
+    print(f"  SKIP - {msg}")
+    SKIPS.append(msg)
 
 
 class _InputTag:
@@ -320,7 +331,7 @@ def test_ha_blueprint_save() -> None:
         from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
         import voluptuous as vol  # noqa: PLC0415
     except ImportError:
-        print("  ok   - Home Assistant not installed, skipped")
+        skip("Home Assistant not installed, test not executed")
         return
 
     async def run() -> list[str]:
@@ -614,7 +625,7 @@ def test_ha_card_render() -> None:
         from homeassistant.core import HomeAssistant  # noqa: PLC0415
         from homeassistant.helpers.template import Template  # noqa: PLC0415
     except ImportError:
-        print("  ok   - Home Assistant not installed, skipped")
+        skip("Home Assistant not installed, test not executed")
         return
 
     states = {
@@ -781,7 +792,7 @@ def test_boost_guard_end_to_end() -> None:
         from homeassistant.helpers.script import Script  # noqa: PLC0415
         from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
     except ImportError:
-        print("  ok   - Home Assistant not installed, skipped")
+        skip("Home Assistant not installed, test not executed")
         return
 
     path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
@@ -992,7 +1003,7 @@ def test_boost_unset_helper_falls_back() -> None:
         from homeassistant.helpers.script import Script  # noqa: PLC0415
         from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
     except ImportError:
-        print("  ok   - Home Assistant not installed, skipped")
+        skip("Home Assistant not installed, test not executed")
         return
 
     path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
@@ -1086,7 +1097,7 @@ def test_presence_gate_skips_when_unset() -> None:
         from homeassistant.helpers.template import Template  # noqa: PLC0415
         from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
     except ImportError:
-        print("  ok   - Home Assistant not installed, skipped")
+        skip("Home Assistant not installed, test not executed")
         return
 
     path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
@@ -1169,7 +1180,7 @@ def test_automation_loads_with_minimal_inputs() -> None:
         from homeassistant.helpers import entity_registry as er  # noqa: PLC0415
         from homeassistant.setup import async_setup_component  # noqa: PLC0415
     except ImportError:
-        print("  ok   - Home Assistant not installed, skipped")
+        skip("Home Assistant not installed, test not executed")
         return
 
     async def run() -> list[str]:
@@ -1253,7 +1264,7 @@ def test_schedule_gates_end_to_end() -> None:
         from homeassistant.setup import async_setup_component  # noqa: PLC0415
         from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
     except ImportError:
-        print("  ok   - Home Assistant not installed, skipped")
+        skip("Home Assistant not installed, test not executed")
         return
 
     path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
@@ -1437,7 +1448,7 @@ def test_boost_stop_first_of_temp_or_time() -> None:
         from homeassistant.helpers.script import Script  # noqa: PLC0415
         from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
     except ImportError:
-        print("  ok   - Home Assistant not installed, skipped")
+        skip("Home Assistant not installed, test not executed")
         return
 
     path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
@@ -1557,7 +1568,7 @@ def test_boost_live_controls_and_master_off() -> None:
         from homeassistant.helpers.script import Script  # noqa: PLC0415
         from homeassistant.util.yaml import loader as yloader  # noqa: PLC0415
     except ImportError:
-        print("  ok   - Home Assistant not installed, skipped")
+        skip("Home Assistant not installed, test not executed")
         return
 
     path = str(BLUEPRINT_DIR / "gsw_smart_hot_water.yaml")
@@ -1702,9 +1713,17 @@ def main() -> int:
     test_ha_card_render()
     test_conditional_conditions()
     print()
+    if SKIPS:
+        print(f"SKIPPED ({len(SKIPS)} tests that could not run):")
+        for s in SKIPS:
+            print(f"  - {s}")
     if FAILURES:
         print(f"RESULT: FAILED ({len(FAILURES)} checks)")
         return 1
+    if SKIPS:
+        print(f"RESULT: ALL CHECKS PASSED ({len(SKIPS)} SKIPPED - "
+              "install Home Assistant to run them)")
+        return 0
     print("RESULT: ALL CHECKS PASSED")
     return 0
 

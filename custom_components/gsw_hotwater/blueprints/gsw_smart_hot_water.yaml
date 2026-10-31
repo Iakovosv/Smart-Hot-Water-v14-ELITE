@@ -948,10 +948,22 @@ action:
                     - delay:
                         seconds: 30
                   until:
+                    # Read the controls here, in the loop's own scope, and not
+                    # from the sequence-level variables above: `until` is
+                    # evaluated by the parent script, which never sees variables
+                    # set inside the repeat sequence. Using the sequence copies
+                    # would freeze the target/minutes at the values they had when
+                    # boost started, so changing them mid-run had no effect.
                     - condition: template
                       value_template: >-
-                        {{ (states(water_temp_sensor_entity) | float(0)) >= boost_target
-                           or (now().timestamp() - boost_start) / 60 >= boost_max
+                        {% set v = states(boost_target_entity) | float(0) %}
+                        {% set lo = state_attr(boost_target_entity, 'min') | float(0) %}
+                        {% set bt = v if (v > 0 and (lo <= 0 or v > lo)) else warm_temp %}
+                        {% set m = states(boost_minutes_entity) | float(0) %}
+                        {% set mlo = state_attr(boost_minutes_entity, 'min') | float(0) %}
+                        {% set bm = m if (m > 0 and (mlo <= 0 or m > mlo)) else max_warm_time %}
+                        {{ (states(water_temp_sensor_entity) | float(0)) >= bt
+                           or (now().timestamp() - boost_start) / 60 >= bm
                            or not is_state(master_enable_entity, 'on')
                            or is_state(water_temp_check_entity, 'on')
                            or states(water_temp_sensor_entity) in ['unknown','unavailable','none',''] }}
@@ -967,7 +979,10 @@ action:
                       entity_id: "{{ status_target }}"
                     data:
                       option: >-
-                        {{ 'Target reached' if (states(water_temp_sensor_entity) | float(0)) >= boost_target else 'Idle' }}
+                        {% set v = states(boost_target_entity) | float(0) %}
+                        {% set lo = state_attr(boost_target_entity, 'min') | float(0) %}
+                        {% set bt = v if (v > 0 and (lo <= 0 or v > lo)) else warm_temp %}
+                        {{ 'Target reached' if (states(water_temp_sensor_entity) | float(0)) >= bt else 'Idle' }}
               - if:
                   - condition: template
                     value_template: "{{ notify_target_entity not in ['', none] }}"
@@ -976,7 +991,10 @@ action:
                     data:
                       title: "GSW Smart Hot Water"
                       message: >-
-                        ✅ Boost ολοκληρώθηκε (στόχος {{ boost_target }}°C, νερό
+                        ✅ Boost ολοκληρώθηκε (στόχος
+                        {% set v = states(boost_target_entity) | float(0) %}
+                        {% set lo = state_attr(boost_target_entity, 'min') | float(0) %}
+                        {{ v if (v > 0 and (lo <= 0 or v > lo)) else warm_temp }}°C, νερό
                         {{ states(water_temp_sensor_entity) }}°C)
               - if:
                   - condition: template
@@ -987,7 +1005,10 @@ action:
                       entity_id: "{{ boiler_status_target }}"
                     data:
                       option: >-
-                        {{ 'Έτοιμο' if (states(water_temp_sensor_entity) | float(0)) >= boost_target else 'Αναμονή' }}
+                        {% set v = states(boost_target_entity) | float(0) %}
+                        {% set lo = state_attr(boost_target_entity, 'min') | float(0) %}
+                        {% set bt = v if (v > 0 and (lo <= 0 or v > lo)) else warm_temp %}
+                        {{ 'Έτοιμο' if (states(water_temp_sensor_entity) | float(0)) >= bt else 'Αναμονή' }}
               - if:
                   - condition: template
                     value_template: "{{ time_left_helper not in ['', none] }}"

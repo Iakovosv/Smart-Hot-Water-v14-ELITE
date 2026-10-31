@@ -103,3 +103,25 @@ Sanity-check the harness by adding a bogus domain; it must report
 3. Run the tests above.
 4. Commit and push (the repo forbids agent-identity strings in tracked files).
 5. Create a GitHub release with `curl` against the releases API.
+
+## Pitfall: `until:` scope inside `repeat` (GSW blueprints)
+
+`until:` / `while:` conditions of a `repeat` are evaluated by the **parent**
+script run. Variables set by a `variables:` step *inside* the repeat sequence
+live in the child `_ScriptRun` and are **not** visible to the parent, so the
+loop condition keeps reading the values from when the loop started.
+
+Symptom: a control entity changed mid-run (e.g. lowering the boost target) has
+no effect, while an entity read directly (`states(...)`) does.
+
+Rule: a loop condition that must react to live changes has to read the
+entities inside the condition template itself, never via a sequence-level
+variable. Same for post-loop status/notification steps that reuse the value.
+
+## Tests
+
+`tests/run_tests.py` needs a real Home Assistant install to exercise the
+engine. When HA is missing those tests print `SKIP` (not `ok`) and the summary
+says how many were skipped, so a green run cannot hide unexecuted engine tests.
+Run `python3 tests/run_tests.py` and expect `RESULT: ALL CHECKS PASSED` with no
+`SKIP` lines to trust it.
