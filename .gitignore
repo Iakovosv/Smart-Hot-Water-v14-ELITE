@@ -7,3 +7,4 @@ venv/
 
 # local patch export
 /gsw-*.patch
+.storage/
