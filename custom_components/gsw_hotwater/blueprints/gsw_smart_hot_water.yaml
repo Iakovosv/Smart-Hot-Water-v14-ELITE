@@ -1028,6 +1028,15 @@ action:
                     data:
                       value: 0
             else:
+              - if:
+                  - condition: template
+                    value_template: "{{ last_reason_entity not in ['', none] }}"
+                then:
+                  - service: input_text.set_value
+                    target:
+                      entity_id: "{{ last_reason_target }}"
+                    data:
+                      value: "master_off"
               - stop: "Master switch is off"
 
       # ============================================================== #
