@@ -8,3 +8,6 @@ venv/
 # local patch export
 /gsw-*.patch
 .storage/
+
+# Home Assistant test-harness artefacts
+blueprints/automation/
