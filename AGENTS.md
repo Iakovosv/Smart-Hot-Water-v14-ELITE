@@ -126,6 +126,14 @@ says how many were skipped, so a green run cannot hide unexecuted engine tests.
 Run `python3 tests/run_tests.py` and expect `RESULT: ALL CHECKS PASSED` with no
 `SKIP` lines to trust it.
 
+`python3 tests/test_branch_coverage.py` enumerates every `if` / `choose` /
+`repeat-until` in the blueprint from the substituted config and proves, via the
+real HA script trace, which branches actually ran. Current state: 57/57
+decision points executed, 56/57 two-sided, 0 dead code. The single one-sided
+guard is provably unreachable (a duplicated master-off condition inside the
+schedule branch, already matched by the `choose` above it) and is listed in the
+test rather than hidden.
+
 A broader 44-scenario end-to-end matrix (button press through the real
 `automation` component, schedules 1-6, every gate, solar modes, cold/warm auto,
 presence, defrost, live control changes, safety watchdog) was run against a
