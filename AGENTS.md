@@ -125,3 +125,11 @@ engine. When HA is missing those tests print `SKIP` (not `ok`) and the summary
 says how many were skipped, so a green run cannot hide unexecuted engine tests.
 Run `python3 tests/run_tests.py` and expect `RESULT: ALL CHECKS PASSED` with no
 `SKIP` lines to trust it.
+
+A broader 44-scenario end-to-end matrix (button press through the real
+`automation` component, schedules 1-6, every gate, solar modes, cold/warm auto,
+presence, defrost, live control changes, safety watchdog) was run against a
+real Home Assistant 2025.1.4 for v1.12.13 and all scenarios passed. When
+staging blueprints for such a harness, keep the HA config dir outside the repo
+or the run writes a stray `blueprints/` tree into the working copy (now
+gitignored).
